@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "asc": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/dist/server.mjs"]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "hypercaffium-play",
+  "version": "0.8.0",
+  "description": "Manage Google Play from Claude: release status, tracks and staged rollouts, listing text and images, review replies and subscriptions. Every change is previewed, confirmed and audited.",
+  "author": {
+    "name": "Hypercaffium Labs"
+  },
+  "keywords": [
+    "google-play",
+    "play-console",
+    "android",
+    "release"
+  ],
+  "license": "MIT",
+  "repository": "https://github.com/hypercaffiumlabs/marketplace"
+}

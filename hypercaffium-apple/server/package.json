@@ -1,0 +1,18 @@
+{
+  "name": "hypercaffium-apple-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Small MCP server that talks to Apple's App Store Connect API. MCP server for the App Store Connect API.",
+  "scripts": {
+    "test": "node --test",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

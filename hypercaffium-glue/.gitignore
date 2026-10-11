@@ -1,0 +1,19 @@
+# dependencies and build output
+node_modules/
+dist/
+
+# anything that could be a secret
+*.p8
+*.pem
+*.key
+*service-account*.json
+.env
+.env.*
+
+# local state and logs
+*.log
+.claude-plugins/
+
+# OS / editor
+.DS_Store
+Thumbs.db

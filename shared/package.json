@@ -1,0 +1,9 @@
+{
+  "name": "hypercaffium-shared",
+  "private": true,
+  "type": "module",
+  "description": "Code shared by the store plugins. Each plugin bundles its own copy at build time.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
