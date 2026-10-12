@@ -194,7 +194,8 @@ export async function applyChange({ ticketId, requireTier1 = false, sensitiveToo
     return applyPlanPayload({ payload: p, deps });
   }
   if (p.kind === 'screenshots') {
-    if (!currentFeatures().listing) throw new Error('The "listing" feature was switched off since the preview, so this upload is refused.');
+    const off = (p.features || ['listing']).filter((k) => !currentFeatures()[k]);
+    if (off.length) throw new Error(`The "${off.join('", "')}" feature was switched off since the preview, so this upload is refused.`);
     deps.store.markUsed(ticketId);
     return deps.runScreenshots(p);
   }

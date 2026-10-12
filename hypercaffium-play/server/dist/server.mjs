@@ -37794,8 +37794,60 @@ async function prepareMigratePrices(deps, { packageName: packageName2, productId
   };
 }
 
-// release.js
+// testers.js
 var APP4 = "/androidpublisher/v3/applications";
+var GROUP = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+async function listTesters(deps, { packageName: packageName2 }) {
+  const pkg = packageName2 || deps.defaultPackage();
+  return deps.withReadContext(pkg, true, async (editId) => {
+    const tracks = (await deps.get(`${APP4}/${pkg}/edits/${editId}/tracks`, {})).tracks || [];
+    const out = [];
+    for (const t of tracks.filter((x) => x.track !== "production")) {
+      try {
+        const r = await deps.get(`${APP4}/${pkg}/edits/${editId}/testers/${encodeURIComponent(t.track)}`, {});
+        out.push({ track: t.track, googleGroups: r.googleGroups || [] });
+      } catch (err) {
+        out.push({ track: t.track, error: String(err.message || err) });
+      }
+    }
+    return { app: pkg, tracks: out, note: "Only Google Groups are managed through the API; individual tester email lists live in Play Console." };
+  });
+}
+async function prepareSetTesters(deps, { packageName: packageName2, track, add = [], remove = [] }) {
+  if (!currentFeatures().testing) {
+    return { allowed: false, tier: 3, blocked: true, reason: 'The "testing" feature is switched off in your settings. Run /hypercaffium-play:setup to see or change your settings.' };
+  }
+  const pkg = packageName2 || deps.defaultPackage();
+  if (!track || track === "production") throw new Error("Pass a testing track (internal, alpha, beta or a closed track name); production has no tester list.");
+  const bad = [...add, ...remove].filter((g) => !GROUP.test(g));
+  if (bad.length) throw new Error(`These are not Google Group email addresses: ${bad.join(", ")}.`);
+  if (!add.length && !remove.length) throw new Error("Pass add and/or remove: Google Group email addresses.");
+  const current = await deps.withReadContext(pkg, true, async (editId) => {
+    const r = await deps.get(`${APP4}/${pkg}/edits/${editId}/testers/${encodeURIComponent(track)}`, {});
+    return r.googleGroups || [];
+  });
+  const lower = (x) => x.toLowerCase();
+  const missing = remove.filter((g) => !current.map(lower).includes(lower(g)));
+  if (missing.length) throw new Error(`Not on ${track} now, so they cannot be removed: ${missing.join(", ")}.`);
+  const next = [...current.filter((g) => !remove.map(lower).includes(lower(g))), ...add.filter((g) => !current.map(lower).includes(lower(g)))];
+  if (next.length === current.length && next.every((g, i) => g === current[i])) throw new Error("Nothing would change: those groups are already set that way.");
+  const preview = await prepareChange({
+    changes: [{ methodId: "edits.testers.update", params: { packageName: pkg, track }, body: { googleGroups: next } }],
+    deps
+  });
+  return {
+    track,
+    adding: add.filter((g) => !current.map(lower).includes(lower(g))),
+    removing: remove,
+    before: current,
+    after: next,
+    note: "Members of an added group can join the test from its opt-in link; members of a removed group lose access to the testing version.",
+    ...preview
+  };
+}
+
+// release.js
+var APP5 = "/androidpublisher/v3/applications";
 var NOTE_MAX = 500;
 var TRACK = /^[A-Za-z0-9_-]{1,40}$/;
 var LANG2 = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
@@ -37808,14 +37860,14 @@ function pkgOf2(deps, packageName2) {
 async function readTrack(deps, pkg, track) {
   if (!TRACK.test(track || "")) throw new Error(`"${track}" is not a valid track name (internal, alpha, beta, production, or a custom track).`);
   try {
-    const t = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP4}/${pkg}/edits/${editId}/tracks/${track}`, {}));
+    const t = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP5}/${pkg}/edits/${editId}/tracks/${track}`, {}));
     return { track: t.track || track, releases: t.releases || [] };
   } catch (err) {
     throw new Error(`Could not read the "${track}" track: ${err.message}`);
   }
 }
 async function readVersionCodes(deps, pkg) {
-  const b = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP4}/${pkg}/edits/${editId}/bundles`, {}));
+  const b = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP5}/${pkg}/edits/${editId}/bundles`, {}));
   return (b.bundles || []).map((x) => Number(x.versionCode)).filter((n) => Number.isInteger(n));
 }
 function checkNotes(notes) {
@@ -38053,7 +38105,7 @@ var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 var packageName = external_exports.string().optional().describe("Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.");
-var server = new McpServer({ name: "hypercaffium-play", version: "0.10.0" });
+var server = new McpServer({ name: "hypercaffium-play", version: "0.11.0" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();
@@ -38395,6 +38447,24 @@ featureTool(
   "Prepare changing the release notes of a draft, in-progress or halted release on a track (Google does not allow changing a completed release). Shows old and new text per language. Tier 2.",
   { packageName, track: external_exports.string().default("production"), releaseNotes: notesSchema },
   (a) => prepareReleaseNotes(writeDeps, a)
+);
+readTool(
+  "play_list_testers",
+  "The Google Groups that can test each testing track (internal, closed, open). Read-only. Individual tester email lists are console-only.",
+  { packageName },
+  (a) => listTesters(writeDeps, a)
+);
+featureTool(
+  "testing",
+  "play_set_testers",
+  "Prepare adding and/or removing Google Groups as testers of one testing track. Shows the list before and after; applied inside one Play edit. Tier 2.",
+  {
+    packageName,
+    track: external_exports.string().describe("internal, alpha, beta, or a closed track name"),
+    add: external_exports.array(external_exports.string()).default([]).describe("Google Group emails to add"),
+    remove: external_exports.array(external_exports.string()).default([]).describe("Google Group emails to remove")
+  },
+  (a) => prepareSetTesters(writeDeps, a)
 );
 featureTool(
   "reviews",

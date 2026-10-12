@@ -28,11 +28,27 @@ import {
   prepareSubmit,
   releaseOverview,
 } from './release.js';
-import { prepareClearScreenshots, prepareScreenshots, runScreenshots } from './screenshots.js';
+import { prepareAppPreviews, prepareClearScreenshots, prepareScreenshots, runScreenshots } from './screenshots.js';
+import {
+  customPagesOverview,
+  DURATIONS,
+  offerCodesOverview,
+  OFFER_MODES,
+  prepareCreateCustomPage,
+  prepareCreateOfferCode,
+  prepareCreatePromotionalOffer,
+  prepareCreateWinBackOffer,
+  prepareEditCustomPageText,
+  prepareGenerateOfferCodes,
+  prepareSetOfferCodeActive,
+  prepareSubmitCustomPage,
+} from './marketing.js';
 import {
   prepareAddBuildToGroup,
   prepareAddTester,
   prepareBetaReview,
+  prepareExpireBuild,
+  prepareRemoveTester,
   prepareAppInfo,
   prepareReplyToReview,
   prepareReviewDetails,
@@ -119,7 +135,7 @@ const ok = (value) => ({ content: [{ type: 'text', text: limitText(JSON.stringif
 const fail = (err) => ({ isError: true, content: [{ type: 'text', text: String(err.message || err) }] });
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 
-const server = new McpServer({ name: 'hypercaffium-apple', version: '0.10.0' });
+const server = new McpServer({ name: 'hypercaffium-apple', version: '0.11.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -567,8 +583,25 @@ featureTool('listing',
     locale: z.string().default('en-US'),
     displayType: z.string().describe('Apple display type, e.g. APP_IPHONE_67, APP_IPAD_PRO_3GEN_129'),
     files: z.array(z.string()).min(1).max(10).describe('Full paths to the image files, in the order they should appear'),
+    customProductPage: z.string().optional().describe('Name or id of a custom product page to add them to instead of the version (its draft)'),
   },
   (a) => prepareScreenshots(writeDeps, a),
+);
+
+featureTool(
+  'listing',
+  'asc_upload_app_previews',
+  'Prepare uploading app preview VIDEOS (.mov, .m4v, .mp4; up to 3 per set, 500 MB each) to a DRAFT version, or to a custom product page draft, for one locale and preview type (e.g. IPHONE_67). Adds only. Tier 1 on a draft version, Tier 2 on a custom page. Applying uploads the files and waits for Apple to process them.',
+  {
+    appId,
+    version: versionArg,
+    locale: z.string().default('en-US'),
+    previewType: z.string().describe('Apple preview type, e.g. IPHONE_67, IPAD_PRO_3GEN_129'),
+    files: z.array(z.string()).min(1).max(3).describe('Full paths to the video files, in display order'),
+    previewFrameTimeCode: z.string().optional().describe('Poster frame, like 00:00:05'),
+    customProductPage: z.string().optional().describe('Name or id of a custom product page (its draft) instead of the version'),
+  },
+  (a) => prepareAppPreviews(writeDeps, a),
 );
 
 featureTool('listing',
@@ -658,6 +691,134 @@ featureTool('pricing',
     amount: z.number().optional().describe('Price per period (paid offers only; needs territory)'),
   },
   (a) => prepareIntroOffer(writeDeps, a),
+);
+
+// ---- offers (pricing) and custom product pages (marketing) ---------------------------
+
+readTool(
+  'asc_offer_codes_overview',
+  'Offer codes of one subscription: each offer (what it gives, who can redeem it, active or not) and its code batches (one-time and custom codes). Read-only.',
+  { subscriptionId },
+  (a) => offerCodesOverview(writeDeps, a),
+);
+
+featureTool(
+  'pricing',
+  'asc_create_offer_code',
+  'Prepare an offer code offer on a subscription (for example 1 month free for new customers). Previews the offer and its per-territory prices. Creates the offer only; codes come from asc_generate_offer_codes. Tier 2.',
+  {
+    subscriptionId,
+    name: z.string().describe('Only you see it'),
+    customerEligibilities: z.array(z.enum(['NEW', 'EXISTING', 'EXPIRED'])).default(['NEW']),
+    offerEligibility: z.enum(['STACK_WITH_INTRO_OFFERS', 'REPLACE_INTRO_OFFERS']).default('STACK_WITH_INTRO_OFFERS'),
+    numberOfPeriods: z.number().int().min(1).default(1),
+    offerMode: z.enum(OFFER_MODES).default('FREE_TRIAL'),
+    duration: z.enum(DURATIONS).default('ONE_MONTH'),
+    territories: z.union([z.literal('all'), z.array(z.string())]).default('all').describe('"all" (where the subscription is sold) or territory codes like ["USA","CAN"]'),
+    amount: z.number().optional().describe('Paid offers: the price in the USA, e.g. 0.99 (must be an Apple price point); other territories get Apple equalized prices'),
+  },
+  (a) => prepareCreateOfferCode(writeDeps, a),
+);
+
+featureTool(
+  'pricing',
+  'asc_generate_offer_codes',
+  'Prepare generating redeemable codes for an offer code offer: a batch of one-time codes (numberOfCodes + expirationDate), or one custom code like BEEKEEPER redeemable numberOfCodes times. Tier 2.',
+  {
+    offerCodeId: z.string().describe('Offer id from asc_offer_codes_overview'),
+    numberOfCodes: z.number().int().min(1),
+    expirationDate: z.string().optional().describe('YYYY-MM-DD (required for one-time codes)'),
+    customCode: z.string().optional().describe('A custom code such as BEEKEEPER (letters and digits)'),
+  },
+  (a) => prepareGenerateOfferCodes(writeDeps, a),
+);
+
+featureTool(
+  'pricing',
+  'asc_set_offer_code_active',
+  'Prepare switching an offer code offer on or off (off stops new redemptions). Tier 2.',
+  { offerCodeId: z.string(), active: z.boolean() },
+  (a) => prepareSetOfferCodeActive(writeDeps, a),
+);
+
+featureTool(
+  'pricing',
+  'asc_create_promotional_offer',
+  'Prepare a promotional offer on a subscription: a discount your app can offer to current or lapsed subscribers (it only reaches customers when your app requests it). Previews the per-territory prices. Tier 2.',
+  {
+    subscriptionId,
+    name: z.string().describe('Only you see it'),
+    offerCode: z.string().describe('The identifier your app uses to request this offer'),
+    numberOfPeriods: z.number().int().min(1).default(1),
+    offerMode: z.enum(OFFER_MODES).default('FREE_TRIAL'),
+    duration: z.enum(DURATIONS).default('ONE_MONTH'),
+    territories: z.union([z.literal('all'), z.array(z.string())]).default('all').describe('"all" (where the subscription is sold) or territory codes like ["USA","CAN"]'),
+    amount: z.number().optional().describe('Paid offers: the price in the USA, e.g. 0.99 (must be an Apple price point); other territories get Apple equalized prices'),
+  },
+  (a) => prepareCreatePromotionalOffer(writeDeps, a),
+);
+
+featureTool(
+  'pricing',
+  'asc_create_win_back_offer',
+  'Prepare a win-back offer that Apple shows to people who used to subscribe (who qualifies, when it runs, and per-territory prices are all previewed). Tier 2.',
+  {
+    subscriptionId,
+    referenceName: z.string().describe('Only you see it'),
+    offerId: z.string().describe('Unique identifier, e.g. winback_2026_q4'),
+    periodCount: z.number().int().min(1).default(1),
+    paidMonthsBefore: z.number().int().min(1).default(1).describe('They must have paid for at least this many months'),
+    lapsedMinMonths: z.number().int().min(1).default(1),
+    lapsedMaxMonths: z.number().int().min(1).default(24),
+    waitBetweenOffersMonths: z.number().int().min(1).optional(),
+    startDate: z.string().describe('YYYY-MM-DD'),
+    endDate: z.string().optional(),
+    priority: z.enum(['HIGH', 'NORMAL']).default('NORMAL'),
+    promote: z.boolean().default(false).describe('Let Apple promote it on the App Store'),
+    offerMode: z.enum(OFFER_MODES).default('FREE_TRIAL'),
+    duration: z.enum(DURATIONS).default('ONE_MONTH'),
+    territories: z.union([z.literal('all'), z.array(z.string())]).default('all').describe('"all" (where the subscription is sold) or territory codes like ["USA","CAN"]'),
+    amount: z.number().optional().describe('Paid offers: the price in the USA, e.g. 0.99 (must be an Apple price point); other territories get Apple equalized prices'),
+  },
+  (a) => prepareCreateWinBackOffer(writeDeps, a),
+);
+
+readTool(
+  'asc_custom_pages_overview',
+  'Custom product pages: alternate App Store pages (for example one per ad audience) with their state, link, deep link and promotional text. Read-only.',
+  { appId },
+  (a) => customPagesOverview(writeDeps, a),
+);
+
+featureTool(
+  'marketing',
+  'asc_create_custom_page',
+  'Prepare a new custom product page as a private draft: name, first locale and promotional text, optional deep link, and by default a copy of the live version\'s screenshots. Add or change screenshots with asc_upload_screenshots (customProductPage). Tier 2.',
+  {
+    appId,
+    name: z.string().describe('Only you see it, 64 characters max'),
+    locale: z.string().default('en-US'),
+    promotionalText: z.string().optional().describe('170 characters max'),
+    deepLink: z.string().optional().describe('Where in your app people land (optional)'),
+    copyFromLiveVersion: z.boolean().default(true),
+  },
+  (a) => prepareCreateCustomPage(writeDeps, a),
+);
+
+featureTool(
+  'marketing',
+  'asc_edit_custom_page_text',
+  'Prepare changing (or adding a locale with) the promotional text of a custom product page draft. Tier 2.',
+  { appId, page: z.string().describe('Page name or id'), locale: z.string().default('en-US'), promotionalText: z.string() },
+  (a) => prepareEditCustomPageText(writeDeps, a),
+);
+
+featureTool(
+  'marketing',
+  'asc_submit_custom_page',
+  'Prepare submitting a custom product page draft to App Review (a 3-step plan, one ticket). Refuses if another submission is already in review. Tier 2.',
+  { appId, page: z.string().describe('Page name or id') },
+  (a) => prepareSubmitCustomPage(writeDeps, a),
 );
 
 // ---- reviews, App Review details, app info, TestFlight -----------------------------
@@ -753,6 +914,22 @@ featureTool(
   "Prepare submitting a processed build to Apple's TestFlight beta review, which external testers need before they can install it. Checks first: build valid and not expired, export compliance answered, What to Test notes, TestFlight description and feedback email, beta review contact details, and that it was not already submitted. Returns the problems and NO ticket if anything is missing. Tier 2.",
   { appId, buildNumber: z.string().describe('Build number, e.g. 57') },
   (a) => prepareBetaReview(writeDeps, a),
+);
+
+featureTool(
+  'testing',
+  'asc_testflight_remove_tester',
+  "Prepare taking one tester out of one TestFlight group (they lose that group's builds; their other groups are untouched and they can be added back). Tier 2.",
+  { appId, email: z.string(), group: z.string().describe('TestFlight group name or id') },
+  (a) => prepareRemoveTester(writeDeps, a),
+);
+
+featureTool(
+  'testing',
+  'asc_testflight_expire_build',
+  'Prepare expiring a TestFlight build so testers can no longer install it. Cannot be undone. Tier 2.',
+  { appId, buildNumber: z.string().describe('Build number, e.g. 57') },
+  (a) => prepareExpireBuild(writeDeps, a),
 );
 
 // ---- generic multi-step plans, and monitoring ---------------------------------

@@ -15,12 +15,14 @@ const lookupState = (state) => async () => ({ data: { attributes: { appStoreStat
 
 // ---------- safety tiers ----------
 
-test('every DELETE in the whole API is Tier 3 (blocked)', async () => {
+test('every DELETE in the whole API is Tier 3 (blocked), except taking testers out of a TestFlight group', async () => {
+  const ALLOWED = new Set(['/v1/betaGroups/{id}/relationships/betaTesters']);
   const deletes = ops().filter((o) => o.method === 'DELETE');
   assert.ok(deletes.length > 100);
   for (const op of deletes) {
     const v = await classify(op, op.path.replace(/\{[^}]+\}/g, 'x'), lookupState('X'));
-    assert.equal(v.tier, 3, `${op.operationId} must be blocked`);
+    if (ALLOWED.has(op.path)) assert.equal(v.tier, 2, `${op.operationId} is the narrow allowed delete (Tier 2)`);
+    else assert.equal(v.tier, 3, `${op.operationId} must be blocked`);
   }
 });
 

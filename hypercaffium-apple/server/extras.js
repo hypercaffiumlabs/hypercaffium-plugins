@@ -406,3 +406,45 @@ export async function prepareBetaReview(deps, { appId, buildNumber }) {
     ...preview,
   };
 }
+
+// Take one tester out of one TestFlight group (the person and their other groups are untouched).
+export async function prepareRemoveTester(deps, { appId, email, group }) {
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email || '')) throw new Error('Pass the tester\'s email address.');
+  if (!group) throw new Error('Pass group (the TestFlight group name or id).');
+  const app = await resolveApp(deps, appId);
+  const g = await findGroup(deps, app, group);
+  const members = list(await deps.get(`/v1/betaGroups/${enc(g.id)}/betaTesters${qs({ limit: 200 })}`));
+  const hit = members.find((t) => String(t.email || '').toLowerCase() === email.toLowerCase());
+  if (!hit) throw new Error(`${email} is not in the TestFlight group "${g.name}".`);
+  const preview = await prepareChange({
+    op: opFor('DELETE', '/v1/betaGroups/{id}/relationships/betaTesters'),
+    pathParams: { id: g.id },
+    body: { data: [{ type: 'betaTesters', id: hit.id }] },
+    deps,
+  });
+  return {
+    group: g.name,
+    tester: { email: hit.email, name: [hit.firstName, hit.lastName].filter(Boolean).join(' ') || undefined },
+    note: 'They lose access to this group\'s builds. Their other groups are not changed, and they can be added back later.',
+    ...preview,
+  };
+}
+
+// Expire a TestFlight build: testers can no longer install it. Apple cannot un-expire a build.
+export async function prepareExpireBuild(deps, { appId, buildNumber }) {
+  const app = await resolveApp(deps, appId);
+  const build = await findBuild(deps, app, buildNumber);
+  if (build.expired) throw new Error(`Build ${build.version} has already expired.`);
+  const preview = await prepareChange({
+    op: opFor('PATCH', '/v1/builds/{id}'),
+    pathParams: { id: build.id },
+    body: { data: { type: 'builds', id: build.id, attributes: { expired: true } } },
+    deps,
+  });
+  return {
+    build: build.version,
+    uploadedLocal: toLocalTime(build.uploadedDate),
+    warning: 'Expiring cannot be undone: testers lose this build at once. It does not affect the App Store or a version already using it in review.',
+    ...preview,
+  };
+}

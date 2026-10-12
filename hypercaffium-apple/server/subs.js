@@ -16,7 +16,7 @@ const opFor = (method, path) => {
 const enc = encodeURIComponent;
 
 // Follow Apple's pagination (links.next) up to a sane cap.
-async function getAll(deps, path, { pages = 6 } = {}) {
+export async function getAll(deps, path, { pages = 6 } = {}) {
   const data = [];
   const included = [];
   let next = path;

@@ -24,6 +24,7 @@ import { prepareEditListing, prepareReplyToReview } from './listing.js';
 import { prepareReplaceImages, prepareUploadImages, runImages } from './images.js';
 import { subscriptionOverview } from './subscriptions.js';
 import { prepareMigratePrices, prepareSetSubscriptionPrice } from './pricing.js';
+import { listTesters, prepareSetTesters } from './testers.js';
 import { prepareReleaseNotes, preparePromote, prepareRollout, prepareSetRelease } from './release.js';
 
 const PLUGIN = 'google-play-console';
@@ -120,7 +121,7 @@ const packageName = z
   .optional()
   .describe('Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.');
 
-const server = new McpServer({ name: 'hypercaffium-play', version: '0.10.0' });
+const server = new McpServer({ name: 'hypercaffium-play', version: '0.11.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -505,6 +506,28 @@ featureTool('releases',
   'Prepare changing the release notes of a draft, in-progress or halted release on a track (Google does not allow changing a completed release). Shows old and new text per language. Tier 2.',
   { packageName, track: z.string().default('production'), releaseNotes: notesSchema },
   (a) => prepareReleaseNotes(writeDeps, a),
+);
+
+// ---- testers ------------------------------------------------------------------------
+
+readTool(
+  'play_list_testers',
+  'The Google Groups that can test each testing track (internal, closed, open). Read-only. Individual tester email lists are console-only.',
+  { packageName },
+  (a) => listTesters(writeDeps, a),
+);
+
+featureTool(
+  'testing',
+  'play_set_testers',
+  'Prepare adding and/or removing Google Groups as testers of one testing track. Shows the list before and after; applied inside one Play edit. Tier 2.',
+  {
+    packageName,
+    track: z.string().describe('internal, alpha, beta, or a closed track name'),
+    add: z.array(z.string()).default([]).describe('Google Group emails to add'),
+    remove: z.array(z.string()).default([]).describe('Google Group emails to remove'),
+  },
+  (a) => prepareSetTesters(writeDeps, a),
 );
 
 // ---- reviews, listing, images, subscriptions -----------------------------------------

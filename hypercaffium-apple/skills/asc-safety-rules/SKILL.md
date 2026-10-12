@@ -1,7 +1,7 @@
 ---
 name: asc-safety-rules
 description: Use when working with App Store Connect, TestFlight, iOS build status, release notes, listing text, screenshots, submitting for App Review, phased release, subscriptions and prices, customer reviews, or App Review details. Explains the asc_ tools and the mandatory prepare-then-apply protocol for any change.
-version: 0.10.0
+version: 0.11.0
 ---
 
 # App Store Connect: how to use these tools safely
@@ -41,6 +41,10 @@ Every change tool below only **prepares**: it returns a preview (before and afte
 | App name, subtitle, privacy URLs | `asc_edit_app_info` (Tier 2: public on release) |
 | TestFlight notes / testers / builds | `asc_testflight_set_notes` (Tier 1), `asc_testflight_add_tester` and `asc_testflight_add_build_to_group` (Tier 2) |
 | External TestFlight beta review | `asc_testflight_submit_for_review` (checks Apple's requirements first and lists what is missing, with NO ticket, if anything is; Tier 2) |
+| Remove a tester / expire a build | `asc_testflight_remove_tester` (one group only; they can be added back), `asc_testflight_expire_build` (cannot be undone: say so) |
+| App preview videos | `asc_upload_app_previews` (draft version: Tier 1; custom page: Tier 2) |
+| Offer codes, promotional and win-back offers | `asc_create_offer_code` then `asc_generate_offer_codes`; `asc_set_offer_code_active`; `asc_create_promotional_offer`; `asc_create_win_back_offer`. All change what customers pay: show the per-territory price table and who qualifies, and get the exact terms from the owner |
+| Custom product pages | `asc_custom_pages_overview`, `asc_create_custom_page`, `asc_edit_custom_page_text`, screenshots via `asc_upload_screenshots` with `customProductPage`, then `asc_submit_custom_page` |
 | Anything else (promo offers, offer codes, win-back, availability...) | `asc_search_api` + `asc_describe_operation` for the exact body, then `asc_prepare_change`; several dependent steps: `asc_prepare_plan` |
 
 Never work around a refusal: not by calling `asc_call` with a write, and not by re-preparing different values after the owner approved a different preview.
@@ -49,7 +53,7 @@ Never work around a refusal: not by calling `asc_call` with a write, and not by 
 
 - **Tier 1 (may run without a prompt; tell the owner afterwards):** TestFlight notes; text, settings, build choice and App Review details of a *draft* version; creating a new draft version; adding screenshots to a draft.
 - **Tier 2 (preview, then the owner's explicit "yes", every time):** submitting, cancelling, phased release actions, releasing, anything on a live version, public replies, and **every subscription or price change** (it changes what customers pay).
-- **Tier 3 (blocked, no ticket):** every delete except removing a single screenshot of a draft version (Tier 2, and the server proves the version is a draft); API keys; and every area whose feature switch is off (users and signing are off unless the owner switched them on).
+- **Tier 3 (blocked, no ticket):** every delete except removing a single screenshot of a draft version (Tier 2, and the server proves the version is a draft) and taking testers out of a TestFlight group (Tier 2); API keys; and every area whose feature switch is off (users and signing are off unless the owner switched them on).
 
 Building or listing these tools is not permission to use them: a real submit, price change or release needs the owner's explicit request for that release.
 

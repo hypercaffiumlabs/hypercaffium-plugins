@@ -6958,10 +6958,10 @@ var require_formats = __commonJS({
     function isLeapYear(year) {
       return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
     }
-    var DATE2 = /^(\d\d\d\d)-(\d\d)-(\d\d)$/;
+    var DATE3 = /^(\d\d\d\d)-(\d\d)-(\d\d)$/;
     var DAYS = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     function date5(str) {
-      const matches = DATE2.exec(str);
+      const matches = DATE3.exec(str);
       if (!matches)
         return false;
       const year = +matches[1];
@@ -29212,8 +29212,8 @@ function currencyCode2(_params) {
   return _stringFormat(ZodCustomStringFormat, "currency_code", currencyCode, _params);
 }
 function hash(alg, params) {
-  const enc4 = params?.enc ?? "hex";
-  const format = `${alg}_${enc4}`;
+  const enc5 = params?.enc ?? "hex";
+  const format = `${alg}_${enc5}`;
   const regex = regexes_exports[format];
   if (!regex)
     throw new Error(`Unrecognized hash format: ${format}`);
@@ -37156,7 +37156,11 @@ async function classify(op, filledPath, lookup2, opts = {}) {
   if (fv.sensitive) return { tier: 2, feature: fv.feature, sensitive: true, reason: `${verdict.reason} (critical: ${fv.feature})` };
   return { ...verdict, feature: fv.feature };
 }
+var TESTER_REMOVE = /^\/v1\/betaGroups\/[^/]+\/relationships\/betaTesters$/;
 async function classifyTier(op, filledPath, lookup2, opts) {
+  if (op.method === "DELETE" && TESTER_REMOVE.test(filledPath)) {
+    return { tier: 2, reason: "removes testers from a TestFlight group (they lose access to its builds; they can be added back)" };
+  }
   if (op.method === "DELETE") {
     const m = SCREENSHOT_DELETE.exec(filledPath);
     if (m) return classifyScreenshotDelete(decodeURIComponent(m[1]), lookup2, Boolean(opts.early));
@@ -37184,6 +37188,7 @@ async function classifyTier(op, filledPath, lookup2, opts) {
 }
 function tier2Reason(op, path7) {
   if (path7.startsWith("/v1/customerReviewResponses")) return "a public reply, visible to everyone on the App Store";
+  if (/^\/v1\/builds\/[^/]+$/.test(path7)) return "this changes a build; expiring a build cannot be undone, and testers lose access to it at once";
   if (path7.startsWith("/v1/betaTesters") || path7.endsWith("/relationships/betaTesters")) return "this adds a tester and Apple may email them an invitation";
   if (path7.startsWith("/v1/reviewSubmissions") || path7.startsWith("/v1/reviewSubmissionItems")) return "this affects what is submitted to App Review";
   if (path7.startsWith("/v1/appStoreVersionReleaseRequests") || path7.includes("PhasedRelease")) return "this releases or rolls out a version to real users";
@@ -37479,7 +37484,8 @@ async function applyChange({ ticketId, requireTier1 = false, sensitiveTool = fal
     return applyPlanPayload({ payload: p, deps });
   }
   if (p.kind === "screenshots") {
-    if (!currentFeatures().listing) throw new Error('The "listing" feature was switched off since the preview, so this upload is refused.');
+    const off = (p.features || ["listing"]).filter((k) => !currentFeatures()[k]);
+    if (off.length) throw new Error(`The "${off.join('", "')}" feature was switched off since the preview, so this upload is refused.`);
     deps.store.markUsed(ticketId);
     return deps.runScreenshots(p);
   }
@@ -37942,7 +37948,13 @@ import crypto3 from "node:crypto";
 import fs6 from "node:fs";
 import path6 from "node:path";
 var MAX_PER_SET = 10;
+var MAX_PREVIEWS_PER_SET = 3;
 var MAX_FILE_BYTES = 25 * 1024 * 1024;
+var MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+var ASSET = {
+  screenshot: { setPath: "/v1/appScreenshotSets", setType: "appScreenshotSets", typeAttr: "screenshotDisplayType", itemPath: "/v1/appScreenshots", itemType: "appScreenshots", setRel: "appScreenshotSet", many: "appScreenshots" },
+  preview: { setPath: "/v1/appPreviewSets", setType: "appPreviewSets", typeAttr: "previewType", itemPath: "/v1/appPreviews", itemType: "appPreviews", setRel: "appPreviewSet", many: "appPreviews" }
+};
 var enc = encodeURIComponent;
 function imageSize(buf) {
   if (buf.length > 24 && buf.readUInt32BE(0) === 2303741511) return { type: "png", width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
@@ -37978,10 +37990,71 @@ function inspectFile(p) {
   if (!dims) throw new Error(`${path6.basename(p)} does not look like a valid PNG or JPEG.`);
   return { path: p, name: path6.basename(p), size: st.size, md5: crypto3.createHash("md5").update(buf).digest("hex"), width: dims.width, height: dims.height, format: dims.type };
 }
-async function prepareScreenshots(deps, { appId: appId2, version: version2, locale = "en-US", displayType, files, platform = "IOS" }) {
-  if (!currentFeatures().listing) {
-    return { allowed: false, tier: 3, blocked: true, reason: 'The "listing" feature is switched off in your settings. Run /hypercaffium-apple:setup to see or change your settings.' };
+var VIDEO_MIME = { mov: "video/quicktime", m4v: "video/x-m4v", mp4: "video/mp4" };
+function inspectVideo(p) {
+  if (typeof p !== "string" || !path6.isAbsolute(p)) throw new Error(`"${p}" must be a full file path.`);
+  const ext = (/\.(mov|m4v|mp4)$/i.exec(p) || [])[1]?.toLowerCase();
+  if (!ext) throw new Error(`${path6.basename(p)}: app previews must be .mov, .m4v or .mp4 videos.`);
+  let st;
+  try {
+    st = fs6.statSync(p);
+  } catch {
+    throw new Error(`${p} does not exist.`);
   }
+  if (!st.isFile() || st.size === 0) throw new Error(`${p} is not a usable file.`);
+  if (st.size > MAX_VIDEO_BYTES) throw new Error(`${path6.basename(p)} is over Apple's 500 MB limit for app previews.`);
+  const buf = fs6.readFileSync(p);
+  if (!["ftyp", "moov", "wide", "mdat", "free"].includes(buf.subarray(4, 8).toString("latin1"))) {
+    throw new Error(`${path6.basename(p)} does not look like an MP4 or QuickTime video.`);
+  }
+  return { path: p, name: path6.basename(p), size: st.size, md5: crypto3.createHash("md5").update(buf).digest("hex"), mime: VIDEO_MIME[ext] };
+}
+async function resolveParent(deps, { appId: appId2, version: version2, platform, locale, customProductPage }) {
+  const app = await resolveApp(deps, appId2);
+  if (customProductPage) {
+    const pages = list(await deps.get(`/v1/apps/${enc(app)}/appCustomProductPages?limit=50`));
+    const page = pages.find((x) => x.id === customProductPage || x.name === customProductPage);
+    if (!page) throw new Error(`No custom product page "${customProductPage}". Pages: ${pages.map((x) => x.name).join(", ") || "none"}.`);
+    const versions = list(await deps.get(`/v1/appCustomProductPages/${enc(page.id)}/appCustomProductPageVersions?limit=20`));
+    const draft = versions.find((v2) => ["PREPARE_FOR_SUBMISSION", "REJECTED"].includes(v2.state));
+    if (!draft) throw new Error(`Custom product page "${page.name}" has no editable draft (states: ${versions.map((v2) => v2.state).join(", ") || "none"}).`);
+    const locs2 = list(await deps.get(`/v1/appCustomProductPageVersions/${enc(draft.id)}/appCustomProductPageLocalizations?limit=50`));
+    const loc2 = locs2.find((l) => l.locale === locale);
+    if (!loc2) throw new Error(`Custom product page "${page.name}" has no ${locale} localization.`);
+    return {
+      rel: { key: "appCustomProductPageLocalization", type: "appCustomProductPageLocalizations", id: loc2.id },
+      setsPath: `/v1/appCustomProductPageLocalizations/${enc(loc2.id)}`,
+      label: `custom product page "${page.name}" (${locale})`,
+      features: ["listing", "marketing"],
+      tier: 2,
+      tierReason: "adds media to a custom product page draft; it becomes public only after Apple approves the page"
+    };
+  }
+  const v = await findVersion(deps, { appId: app, version: version2, platform, mode: "editable" });
+  const state = v.appStoreState || v.appVersionState;
+  if (!EDITABLE_VERSION_STATES.has(state)) throw new Error(`Version ${v.versionString} is ${state}; media can only be added while it is a draft.`);
+  const locs = list(await deps.get(`/v1/appStoreVersions/${enc(v.id)}/appStoreVersionLocalizations?limit=50`));
+  const loc = locs.find((l) => l.locale === locale);
+  if (!loc) throw new Error(`Version ${v.versionString} has no ${locale} localization yet. Create it with asc_edit_listing first.`);
+  return {
+    rel: { key: "appStoreVersionLocalization", type: "appStoreVersionLocalizations", id: loc.id },
+    setsPath: `/v1/appStoreVersionLocalizations/${enc(loc.id)}`,
+    label: `${v.versionString} (${locale})`,
+    version: v.versionString,
+    versionState: state,
+    features: ["listing"],
+    tier: 1,
+    tierReason: "adding media to a draft version (not visible to users, nothing is deleted)"
+  };
+}
+var featureOff = (features) => {
+  const f = currentFeatures();
+  const off = features.filter((k) => !f[k]);
+  return off.length ? { allowed: false, tier: 3, blocked: true, reason: `The "${off.join('", "')}" feature is switched off in your settings. Run /hypercaffium-apple:setup to see or change your settings.` } : null;
+};
+async function prepareScreenshots(deps, { appId: appId2, version: version2, locale = "en-US", displayType, files, platform = "IOS", customProductPage }) {
+  const off = featureOff(customProductPage ? ["listing", "marketing"] : ["listing"]);
+  if (off) return off;
   if (!Array.isArray(files) || files.length === 0) throw new Error("Pass files: a list of full paths to PNG or JPEG screenshots.");
   if (files.length > MAX_PER_SET) throw new Error(`At most ${MAX_PER_SET} screenshots per set.`);
   const setOp = findOperation("POST", "/v1/appScreenshotSets");
@@ -37990,63 +38063,90 @@ async function prepareScreenshots(deps, { appId: appId2, version: version2, loca
   });
   if (typeProblems.length) throw new Error(`displayType "${displayType}" is not valid. ${typeProblems[0]}`);
   const inspected = files.map(inspectFile);
-  const app = await resolveApp(deps, appId2);
-  const v = await findVersion(deps, { appId: app, version: version2, platform, mode: "editable" });
-  const state = v.appStoreState || v.appVersionState;
-  if (!EDITABLE_VERSION_STATES.has(state)) throw new Error(`Version ${v.versionString} is ${state}; screenshots can only be added while it is a draft.`);
-  const locs = list(await deps.get(`/v1/appStoreVersions/${enc(v.id)}/appStoreVersionLocalizations?limit=50`));
-  const loc = locs.find((l) => l.locale === locale);
-  if (!loc) throw new Error(`Version ${v.versionString} has no ${locale} localization yet. Create it with asc_edit_listing first.`);
-  const sb = await deps.get(`/v1/appStoreVersionLocalizations/${enc(loc.id)}/appScreenshotSets?include=appScreenshots&limit=50`);
-  const set2 = (sb.data || []).find((s) => s.attributes?.screenshotDisplayType === displayType) || null;
-  const existing = set2 ? (set2.relationships?.appScreenshots?.data || []).length : 0;
-  if (existing + inspected.length > MAX_PER_SET) {
+  const parent = await resolveParent(deps, { appId: appId2, version: version2, platform, locale, customProductPage });
+  return finishPrepare(deps, {
+    asset: "screenshot",
+    parent,
+    typeValue: displayType,
+    files: inspected,
+    max: MAX_PER_SET,
+    locale,
+    describe: (f) => ({ name: f.name, size: f.size, dimensions: `${f.width}x${f.height}`, format: f.format })
+  });
+}
+async function prepareAppPreviews(deps, { appId: appId2, version: version2, locale = "en-US", previewType, files, previewFrameTimeCode, platform = "IOS", customProductPage }) {
+  const off = featureOff(customProductPage ? ["listing", "marketing"] : ["listing"]);
+  if (off) return off;
+  if (!Array.isArray(files) || files.length === 0) throw new Error("Pass files: a list of full paths to .mov, .m4v or .mp4 videos.");
+  if (files.length > MAX_PREVIEWS_PER_SET) throw new Error(`At most ${MAX_PREVIEWS_PER_SET} app previews per set.`);
+  if (previewFrameTimeCode && !/^\d{2}:\d{2}:\d{2}$/.test(previewFrameTimeCode)) throw new Error("previewFrameTimeCode must look like 00:00:05 (the poster frame).");
+  const setOp = findOperation("POST", "/v1/appPreviewSets");
+  const typeProblems = validateBody(setOp, {
+    data: { type: "appPreviewSets", attributes: { previewType }, relationships: { appStoreVersionLocalization: { data: { type: "appStoreVersionLocalizations", id: "x" } } } }
+  });
+  if (typeProblems.length) throw new Error(`previewType "${previewType}" is not valid. ${typeProblems[0]}`);
+  const inspected = files.map(inspectVideo);
+  const parent = await resolveParent(deps, { appId: appId2, version: version2, platform, locale, customProductPage });
+  return finishPrepare(deps, {
+    asset: "preview",
+    parent,
+    typeValue: previewType,
+    files: inspected,
+    max: MAX_PREVIEWS_PER_SET,
+    locale,
+    previewFrameTimeCode,
+    describe: (f) => ({ name: f.name, sizeMB: Math.round(f.size / 1048576 * 10) / 10 })
+  });
+}
+async function finishPrepare(deps, { asset, parent, typeValue, files, max, locale, previewFrameTimeCode, describe: describe3 }) {
+  const A = ASSET[asset];
+  const sb = await deps.get(`${parent.setsPath}/${A.setType}?include=${A.many}&limit=50`);
+  const set2 = (sb.data || []).find((x) => x.attributes?.[A.typeAttr] === typeValue) || null;
+  const existing = set2 ? (set2.relationships?.[A.many]?.data || []).length : 0;
+  if (existing + files.length > max) {
     throw new Error(
-      `That set already has ${existing} screenshot(s); adding ${inspected.length} would exceed ${MAX_PER_SET}. Remove old ones first with asc_clear_screenshots (a Tier 2 step that needs the owner's yes), then upload again.`
+      `That set already has ${existing}; adding ${files.length} would exceed ${max}.` + (asset === "screenshot" && parent.version ? " Remove old ones first with asc_clear_screenshots (needs the owner's yes), then upload again." : " Remove old ones in App Store Connect first.")
     );
   }
-  const title = `Add ${inspected.length} ${displayType} screenshot(s) to ${v.versionString} (${locale})`;
-  const payload = {
-    kind: "screenshots",
-    tier: 1,
-    title,
-    versionString: v.versionString,
-    localizationId: loc.id,
-    setId: set2?.id || null,
-    displayType,
-    files: inspected
-  };
+  const noun = asset === "screenshot" ? "screenshot(s)" : "app preview video(s)";
+  const title = `Add ${files.length} ${typeValue} ${noun} to ${parent.label}`;
+  const payload = { kind: "screenshots", asset, tier: parent.tier, features: parent.features, title, parentRel: parent.rel, setId: set2?.id || null, typeValue, previewFrameTimeCode, files };
   const ticket = deps.store.create(payload);
   return {
     allowed: true,
     kind: "screenshots",
-    tier: 1,
-    tierReason: "adding screenshots to a draft version (not visible to users, nothing is deleted)",
+    asset,
+    tier: parent.tier,
+    tierReason: parent.tierReason,
     ticket: ticket.id,
     expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
     title,
-    version: v.versionString,
-    versionState: state,
+    target: parent.label,
+    version: parent.version,
+    versionState: parent.versionState,
     locale,
-    displayType,
+    type: typeValue,
     creatingNewSet: !set2,
     existingInSet: existing,
-    files: inspected.map(({ name, size, width, height, format }) => ({ name, size, dimensions: `${width}x${height}`, format })),
-    note: "Apple checks dimensions when processing. A wrong size shows up as FAILED for that file, with nothing public affected.",
-    nextStep: "Low risk. Apply with asc_apply_safe_change (or asc_apply_change)."
+    files: files.map(describe3),
+    note: "Apple checks dimensions and length when processing. A wrong file shows up as FAILED, with nothing public affected.",
+    nextStep: parent.tier === 1 ? "Low risk. Apply with asc_apply_safe_change (or asc_apply_change)." : "Show this to the owner and wait for an explicit yes, then apply with asc_apply_change."
   };
 }
 var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function runScreenshots(payload, deps, { fetchImpl = fetch, pollMs = 2e3, pollTries = 30 } = {}) {
+  const A = ASSET[payload.asset || "screenshot"];
+  const parentRel = payload.parentRel || { key: "appStoreVersionLocalization", type: "appStoreVersionLocalizations", id: payload.localizationId };
+  const typeValue = payload.typeValue || payload.displayType;
   const results = [];
   let setId = payload.setId;
   try {
     if (!setId) {
-      const r = await deps.send("POST", "/v1/appScreenshotSets", {}, {
+      const r = await deps.send("POST", A.setPath, {}, {
         data: {
-          type: "appScreenshotSets",
-          attributes: { screenshotDisplayType: payload.displayType },
-          relationships: { appStoreVersionLocalization: { data: { type: "appStoreVersionLocalizations", id: payload.localizationId } } }
+          type: A.setType,
+          attributes: { [A.typeAttr]: typeValue },
+          relationships: { [parentRel.key]: { data: { type: parentRel.type, id: parentRel.id } } }
         }
       });
       setId = r.data.id;
@@ -38058,12 +38158,11 @@ async function runScreenshots(payload, deps, { fetchImpl = fetch, pollMs = 2e3, 
       if (buf.length !== f.size || crypto3.createHash("md5").update(buf).digest("hex") !== f.md5) {
         throw new Error(`${f.name} changed on disk since the preview. Prepare again.`);
       }
-      const created = await deps.send("POST", "/v1/appScreenshots", {}, {
-        data: {
-          type: "appScreenshots",
-          attributes: { fileName: f.name, fileSize: f.size },
-          relationships: { appScreenshotSet: { data: { type: "appScreenshotSets", id: setId } } }
-        }
+      const attributes = { fileName: f.name, fileSize: f.size };
+      if (f.mime) attributes.mimeType = f.mime;
+      if (payload.previewFrameTimeCode) attributes.previewFrameTimeCode = payload.previewFrameTimeCode;
+      const created = await deps.send("POST", A.itemPath, {}, {
+        data: { type: A.itemType, attributes, relationships: { [A.setRel]: { data: { type: A.setType, id: setId } } } }
       });
       const shotId = created.data.id;
       entry.id = shotId;
@@ -38072,12 +38171,12 @@ async function runScreenshots(payload, deps, { fetchImpl = fetch, pollMs = 2e3, 
         const res = await fetchImpl(op.url, { method: op.method || "PUT", headers, body: buf.subarray(op.offset, op.offset + op.length) });
         if (!res.ok) throw new Error(`Upload of ${f.name} failed: HTTP ${res.status}`);
       }
-      await deps.send("PATCH", `/v1/appScreenshots/${enc(shotId)}`, {}, {
-        data: { type: "appScreenshots", id: shotId, attributes: { uploaded: true, sourceFileChecksum: f.md5 } }
+      await deps.send("PATCH", `${A.itemPath}/${enc(shotId)}`, {}, {
+        data: { type: A.itemType, id: shotId, attributes: { uploaded: true, sourceFileChecksum: f.md5 } }
       });
       let stateName = "UPLOAD_COMPLETE";
       for (let i = 0; i < pollTries; i++) {
-        const cur = await deps.get(`/v1/appScreenshots/${enc(shotId)}`);
+        const cur = await deps.get(`${A.itemPath}/${enc(shotId)}`);
         stateName = cur.data?.attributes?.assetDeliveryState?.state || stateName;
         if (stateName === "COMPLETE" || stateName === "FAILED") {
           entry.errors = cur.data?.attributes?.assetDeliveryState?.errors;
@@ -38096,7 +38195,7 @@ async function runScreenshots(payload, deps, { fetchImpl = fetch, pollMs = 2e3, 
       setId,
       results,
       error: String(err.message || err),
-      advice: "Screenshot records already created cannot be deleted by this plugin. Check the set in App Store Connect before retrying."
+      advice: "Records already created cannot be deleted by this plugin. Check the set in App Store Connect before retrying."
     };
   }
   const failed = results.filter((r) => r.state !== "COMPLETE");
@@ -38125,391 +38224,17 @@ async function prepareClearScreenshots(deps, { appId: appId2, version: version2,
   return { ...plan, version: v.versionString, versionState: state, locale, displayType, willKeep: Math.max(0, keepFirst), note: "Removed screenshots can be uploaded again. Nothing else on the version is touched." };
 }
 
-// extras.js
-var enc2 = encodeURIComponent;
+// subs.js
 var qs2 = (o) => {
   const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
-  return e.length ? `?${e.map(([k, v]) => `${k}=${enc2(String(v))}`).join("&")}` : "";
+  return e.length ? `?${e.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&")}` : "";
 };
 var opFor2 = (method, path7) => {
   const op = findOperation(method, path7);
   if (!op) throw new Error(`Apple's API has no ${method} ${path7}.`);
   return op;
 };
-var clone2 = (v) => v === void 0 ? void 0 : JSON.parse(JSON.stringify(v));
-var HIDDEN = "(hidden)";
-async function reviewInbox(deps, { appId: appId2, limit = 20, unrepliedOnly = true }) {
-  const app = await resolveApp(deps, appId2);
-  const body = await deps.get(
-    `/v1/apps/${enc2(app)}/customerReviews${qs2({ sort: "-createdDate", include: "response", limit: Math.min(200, Math.max(50, limit * 3)) })}`
-  );
-  const responses = new Map((body.included || []).filter((i) => i.type === "customerReviewResponses").map((r) => [r.id, flat(r)]));
-  const rows = (body.data || []).map((r) => {
-    const respId = r.relationships?.response?.data?.id;
-    const resp = respId ? responses.get(respId) : null;
-    const a = r.attributes || {};
-    return {
-      id: r.id,
-      rating: a.rating,
-      title: a.title,
-      body: a.body,
-      reviewer: a.reviewerNickname,
-      territory: a.territory,
-      createdLocal: toLocalTime(a.createdDate),
-      replied: Boolean(respId),
-      reply: resp ? { text: resp.responseBody, state: resp.state, lastModifiedLocal: toLocalTime(resp.lastModifiedDate) } : null
-    };
-  });
-  const shown = (unrepliedOnly ? rows.filter((r) => !r.replied) : rows).slice(0, limit);
-  return { app, unrepliedOnly, totalChecked: rows.length, unreplied: rows.filter((r) => !r.replied).length, reviews: shown };
-}
-async function prepareReplyToReview(deps, { reviewId, text }) {
-  if (!reviewId) throw new Error("Pass reviewId (from asc_review_inbox).");
-  if (typeof text !== "string" || !text.trim()) throw new Error("The reply needs text.");
-  if (text.length > 5970) throw new Error(`The reply is ${text.length} characters; Apple allows at most 5970.`);
-  let review;
-  try {
-    review = flat((await deps.get(`/v1/customerReviews/${enc2(reviewId)}`)).data);
-  } catch {
-    throw new Error(`Review ${reviewId} was not found.`);
-  }
-  let existing = null;
-  try {
-    const r = await deps.get(`/v1/customerReviews/${enc2(reviewId)}/response`);
-    existing = r.data ? flat(r.data) : null;
-  } catch {
-    existing = null;
-  }
-  const preview = await prepareChange({
-    op: opFor2("POST", "/v1/customerReviewResponses"),
-    body: {
-      data: {
-        type: "customerReviewResponses",
-        attributes: { responseBody: text },
-        relationships: { review: { data: { type: "customerReviews", id: reviewId } } }
-      }
-    },
-    deps
-  });
-  return {
-    ...preview,
-    review: { rating: review.rating, title: review.title, body: review.body, reviewer: review.reviewerNickname, territory: review.territory, createdLocal: toLocalTime(review.createdDate) },
-    existingReply: existing ? existing.responseBody : null,
-    willBePublic: "This reply is visible to everyone on the App Store, under the developer name.",
-    note: existing ? "Apple replaces the existing reply with this one." : void 0
-  };
-}
-var REVIEW_FIELDS = ["contactFirstName", "contactLastName", "contactPhone", "contactEmail", "demoAccountRequired", "demoAccountName", "demoAccountPassword", "notes"];
-function checkReviewFields(fields) {
-  const entries = Object.entries(fields || {}).filter(([, v]) => v !== void 0);
-  if (!entries.length) throw new Error(`Provide at least one field: ${REVIEW_FIELDS.join(", ")}.`);
-  for (const [k, v] of entries) {
-    if (!REVIEW_FIELDS.includes(k)) throw new Error(`Unknown field "${k}". Allowed: ${REVIEW_FIELDS.join(", ")}.`);
-    if (k === "demoAccountRequired") {
-      if (typeof v !== "boolean") throw new Error("demoAccountRequired must be true or false.");
-    } else if (typeof v !== "string") {
-      throw new Error(`"${k}" must be text.`);
-    }
-  }
-  const f = Object.fromEntries(entries);
-  if (f.contactEmail !== void 0 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.contactEmail)) throw new Error("contactEmail does not look like an email address.");
-  if (f.contactPhone !== void 0 && !/^\+?[0-9 ()\-.]{7,20}$/.test(f.contactPhone)) throw new Error("contactPhone must be a phone number such as +15551234567.");
-  if (f.notes !== void 0 && f.notes.length > 4e3) throw new Error(`notes is ${f.notes.length} characters; Apple allows at most 4000.`);
-  return f;
-}
-function maskReviewPreview(preview) {
-  const p = clone2(preview);
-  if (p.changes) {
-    for (const c of p.changes) if (c.field === "demoAccountPassword") {
-      c.from = c.from ? HIDDEN : c.from;
-      c.to = HIDDEN;
-    }
-  }
-  if (p.before && "demoAccountPassword" in p.before) p.before.demoAccountPassword = p.before.demoAccountPassword ? HIDDEN : p.before.demoAccountPassword;
-  const attrs = p.requestBody?.data?.attributes;
-  if (attrs && "demoAccountPassword" in attrs) attrs.demoAccountPassword = HIDDEN;
-  return p;
-}
-async function prepareReviewDetails(deps, { appId: appId2, version: version2, fields, platform = "IOS" }) {
-  const attrs = checkReviewFields(fields);
-  const app = await resolveApp(deps, appId2);
-  const v = await findVersion(deps, { appId: app, version: version2, platform, mode: "editable" });
-  let detail = null;
-  try {
-    const r = await deps.get(`/v1/appStoreVersions/${enc2(v.id)}/appStoreReviewDetail`);
-    detail = r.data ? flat(r.data) : null;
-  } catch {
-    detail = null;
-  }
-  const context = { version: v.versionString, versionState: v.appStoreState || v.appVersionState };
-  if (detail) {
-    const preview2 = await prepareChange({
-      op: opFor2("PATCH", "/v1/appStoreReviewDetails/{id}"),
-      pathParams: { id: detail.id },
-      body: { data: { type: "appStoreReviewDetails", id: detail.id, attributes: attrs } },
-      deps
-    });
-    return { ...context, ...maskReviewPreview(preview2) };
-  }
-  const preview = await prepareChange({
-    op: opFor2("POST", "/v1/appStoreReviewDetails"),
-    body: {
-      data: {
-        type: "appStoreReviewDetails",
-        attributes: attrs,
-        relationships: { appStoreVersion: { data: { type: "appStoreVersions", id: v.id } } }
-      }
-    },
-    deps
-  });
-  return { ...context, creating: true, ...maskReviewPreview(preview) };
-}
-var INFO_LIMITS = { name: 30, subtitle: 30 };
-var INFO_FIELDS = ["name", "subtitle", "privacyPolicyUrl", "privacyChoicesUrl", "privacyPolicyText"];
-function checkInfoFields(fields) {
-  const entries = Object.entries(fields || {}).filter(([, v]) => v !== void 0);
-  if (!entries.length) throw new Error(`Provide at least one field: ${INFO_FIELDS.join(", ")}.`);
-  for (const [k, v] of entries) {
-    if (!INFO_FIELDS.includes(k)) throw new Error(`Unknown field "${k}". Allowed: ${INFO_FIELDS.join(", ")}.`);
-    if (typeof v !== "string") throw new Error(`"${k}" must be text.`);
-    if (INFO_LIMITS[k] && v.length > INFO_LIMITS[k]) throw new Error(`"${k}" is ${v.length} characters; Apple allows at most ${INFO_LIMITS[k]}.`);
-    if (k.endsWith("Url") && v !== "" && !/^https:\/\/\S+$/.test(v)) throw new Error(`"${k}" must be a full https:// address.`);
-  }
-  return Object.fromEntries(entries);
-}
-async function prepareAppInfo(deps, { appId: appId2, locale = "en-US", fields }) {
-  const attrs = checkInfoFields(fields);
-  const app = await resolveApp(deps, appId2);
-  const infos = list(await deps.get(`/v1/apps/${enc2(app)}/appInfos${qs2({ limit: 10 })}`));
-  const stateOf4 = (i) => i.appStoreState || i.state;
-  const editable = infos.find((i) => EDITABLE_VERSION_STATES.has(stateOf4(i)));
-  if (!editable) {
-    throw new Error(
-      `App info can only be changed while a version is being prepared. Current states: ${infos.map((i) => stateOf4(i)).join(", ") || "none"}. Create the next version first (asc_create_version).`
-    );
-  }
-  const locs = list(await deps.get(`/v1/appInfos/${enc2(editable.id)}/appInfoLocalizations${qs2({ limit: 50 })}`));
-  const hit = locs.find((l) => l.locale === locale);
-  const context = { appInfoState: stateOf4(editable), locale };
-  if (hit) {
-    const preview2 = await prepareChange({
-      op: opFor2("PATCH", "/v1/appInfoLocalizations/{id}"),
-      pathParams: { id: hit.id },
-      body: { data: { type: "appInfoLocalizations", id: hit.id, attributes: attrs } },
-      deps
-    });
-    return { ...context, publicOnRelease: Boolean(attrs.name || attrs.subtitle), ...preview2 };
-  }
-  if (!attrs.name) throw new Error(`No ${locale} app info exists yet; creating one needs a name.`);
-  const preview = await prepareChange({
-    op: opFor2("POST", "/v1/appInfoLocalizations"),
-    body: {
-      data: {
-        type: "appInfoLocalizations",
-        attributes: { locale, ...attrs },
-        relationships: { appInfo: { data: { type: "appInfos", id: editable.id } } }
-      }
-    },
-    deps
-  });
-  return { ...context, creatingNewLocale: true, existingLocales: locs.map((l) => l.locale), ...preview };
-}
-async function findGroup(deps, app, group) {
-  const groups = list(await deps.get(`/v1/apps/${enc2(app)}/betaGroups${qs2({ limit: 50 })}`));
-  const hit = groups.find((g) => g.id === group || g.name === group);
-  if (!hit) throw new Error(`No TestFlight group "${group}". Groups: ${groups.map((g) => g.name).join(", ") || "none"}.`);
-  return hit;
-}
-async function findBuild(deps, app, buildNumber) {
-  if (!buildNumber) throw new Error('Pass buildNumber (for example "57").');
-  const b = list(await deps.get(`/v1/builds${qs2({ "filter[app]": app, "filter[version]": String(buildNumber), limit: 5 })}`))[0];
-  if (!b) throw new Error(`No build "${buildNumber}" found for this app.`);
-  return b;
-}
-async function testflightOverview(deps, { appId: appId2 }) {
-  const app = await resolveApp(deps, appId2);
-  const groups = list(await deps.get(`/v1/apps/${enc2(app)}/betaGroups${qs2({ limit: 50 })}`));
-  const out = [];
-  for (const g of groups) {
-    const [testers, builds] = await Promise.all([
-      deps.get(`/v1/betaGroups/${enc2(g.id)}/betaTesters${qs2({ limit: 1 })}`).catch(() => null),
-      deps.get(`/v1/betaGroups/${enc2(g.id)}/builds${qs2({ limit: 5 })}`).catch(() => null)
-    ]);
-    out.push({
-      id: g.id,
-      name: g.name,
-      internal: g.isInternalGroup,
-      publicLink: g.publicLinkEnabled ? g.publicLink : null,
-      hasAccessToAllBuilds: g.hasAccessToAllBuilds,
-      testers: testers?.meta?.paging?.total ?? null,
-      builds: builds ? list(builds).map((b) => ({ build: b.version, uploadedLocal: toLocalTime(b.uploadedDate), expired: b.expired })) : null
-    });
-  }
-  return { app, groups: out };
-}
-async function prepareTestflightNotes(deps, { appId: appId2, buildNumber, locale = "en-US", whatsNew }) {
-  if (typeof whatsNew !== "string" || !whatsNew.trim()) throw new Error("whatsNew needs text.");
-  if (whatsNew.length > 4e3) throw new Error(`whatsNew is ${whatsNew.length} characters; TestFlight allows at most 4000.`);
-  const app = await resolveApp(deps, appId2);
-  const build = await findBuild(deps, app, buildNumber);
-  const locs = list(await deps.get(`/v1/builds/${enc2(build.id)}/betaBuildLocalizations${qs2({ limit: 50 })}`));
-  const hit = locs.find((l) => l.locale === locale);
-  const context = { build: build.version, locale };
-  if (hit) {
-    return {
-      ...context,
-      ...await prepareChange({
-        op: opFor2("PATCH", "/v1/betaBuildLocalizations/{id}"),
-        pathParams: { id: hit.id },
-        body: { data: { type: "betaBuildLocalizations", id: hit.id, attributes: { whatsNew } } },
-        deps
-      })
-    };
-  }
-  return {
-    ...context,
-    creatingNewLocale: true,
-    ...await prepareChange({
-      op: opFor2("POST", "/v1/betaBuildLocalizations"),
-      body: {
-        data: {
-          type: "betaBuildLocalizations",
-          attributes: { locale, whatsNew },
-          relationships: { build: { data: { type: "builds", id: build.id } } }
-        }
-      },
-      deps
-    })
-  };
-}
-async function prepareAddTester(deps, { appId: appId2, email: email3, firstName, lastName, group }) {
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email3 || "")) throw new Error("Pass a valid email address.");
-  if (!group) throw new Error("Pass group (the TestFlight group name or id).");
-  const app = await resolveApp(deps, appId2);
-  const g = await findGroup(deps, app, group);
-  let existing = null;
-  try {
-    existing = list(await deps.get(`/v1/betaTesters${qs2({ "filter[email]": email3, limit: 1 })}`))[0] || null;
-  } catch {
-    existing = null;
-  }
-  const note = g.isInternalGroup ? "Internal group: the person must already be a user on your App Store Connect team." : "External group: Apple emails this person an invitation to TestFlight.";
-  if (existing) {
-    const preview2 = await prepareChange({
-      op: opFor2("POST", "/v1/betaGroups/{id}/relationships/betaTesters"),
-      pathParams: { id: g.id },
-      body: { data: [{ type: "betaTesters", id: existing.id }] },
-      deps
-    });
-    return { group: g.name, existingTester: true, note, ...preview2 };
-  }
-  const attributes = { email: email3 };
-  if (firstName) attributes.firstName = firstName;
-  if (lastName) attributes.lastName = lastName;
-  const preview = await prepareChange({
-    op: opFor2("POST", "/v1/betaTesters"),
-    body: {
-      data: {
-        type: "betaTesters",
-        attributes,
-        relationships: { betaGroups: { data: [{ type: "betaGroups", id: g.id }] } }
-      }
-    },
-    deps
-  });
-  return { group: g.name, existingTester: false, note, ...preview };
-}
-async function prepareAddBuildToGroup(deps, { appId: appId2, buildNumber, group }) {
-  const app = await resolveApp(deps, appId2);
-  const g = await findGroup(deps, app, group);
-  const build = await findBuild(deps, app, buildNumber);
-  if (build.processingState !== "VALID") throw new Error(`Build ${buildNumber} is ${build.processingState}, not VALID yet.`);
-  if (build.expired) throw new Error(`Build ${buildNumber} has expired.`);
-  const preview = await prepareChange({
-    op: opFor2("POST", "/v1/betaGroups/{id}/relationships/builds"),
-    pathParams: { id: g.id },
-    body: { data: [{ type: "builds", id: build.id }] },
-    deps
-  });
-  return {
-    group: g.name,
-    build: build.version,
-    note: g.isInternalGroup ? "Internal testers get the build right away." : "External groups need Apple's TestFlight beta review for a new build before testers can install it.",
-    ...preview
-  };
-}
-async function prepareBetaReview(deps, { appId: appId2, buildNumber }) {
-  const app = await resolveApp(deps, appId2);
-  const build = await findBuild(deps, app, buildNumber);
-  const problems = [];
-  if (build.processingState !== "VALID") problems.push(`Build ${build.version} is ${build.processingState}, not VALID yet.`);
-  if (build.expired) problems.push(`Build ${build.version} has expired.`);
-  if (build.usesNonExemptEncryption === null || build.usesNonExemptEncryption === void 0) {
-    problems.push("Export compliance is not answered for this build (usesNonExemptEncryption). Answer it in App Store Connect or set it in your build configuration.");
-  }
-  let existing = null;
-  try {
-    const sub = await deps.get(`/v1/builds/${enc2(build.id)}/betaAppReviewSubmission`);
-    existing = sub?.data ? { id: sub.data.id, state: sub.data.attributes?.betaReviewState } : null;
-  } catch {
-    existing = null;
-  }
-  if (existing) {
-    return {
-      allowed: false,
-      alreadySubmitted: true,
-      build: build.version,
-      betaReviewState: existing.state,
-      reason: `Build ${build.version} was already submitted for beta review (state: ${existing.state}).`
-    };
-  }
-  const notes = list(await deps.get(`/v1/builds/${enc2(build.id)}/betaBuildLocalizations${qs2({ limit: 50 })}`));
-  if (!notes.some((n) => (n.whatsNew || "").trim())) {
-    problems.push('No "What to Test" notes on this build. Add them with asc_testflight_set_notes.');
-  }
-  const appInfo = list(await deps.get(`/v1/apps/${enc2(app)}/betaAppLocalizations${qs2({ limit: 50 })}`));
-  if (!appInfo.some((l) => (l.description || "").trim() && (l.feedbackEmail || "").trim())) {
-    problems.push("The TestFlight app description and feedback email are not filled in (Test Information in App Store Connect).");
-  }
-  let detail = null;
-  try {
-    const d = await deps.get(`/v1/apps/${enc2(app)}/betaAppReviewDetail`);
-    detail = d?.data?.attributes || null;
-  } catch {
-    detail = null;
-  }
-  const missing = ["contactFirstName", "contactLastName", "contactPhone", "contactEmail"].filter((k) => !(detail?.[k] || "").trim());
-  if (missing.length) problems.push(`Beta App Review contact details are missing: ${missing.join(", ")}.`);
-  if (detail?.demoAccountRequired && !(detail.demoAccountName || "").trim()) {
-    problems.push("Beta App Review says a demo account is required, but no demo account name is set.");
-  }
-  if (problems.length) {
-    return { allowed: false, build: build.version, readyForBetaReview: false, problems, note: "Nothing was prepared. Fix these first, then ask again." };
-  }
-  const preview = await prepareChange({
-    op: opFor2("POST", "/v1/betaAppReviewSubmissions"),
-    body: { data: { type: "betaAppReviewSubmissions", relationships: { build: { data: { type: "builds", id: build.id } } } } },
-    deps
-  });
-  return {
-    build: build.version,
-    readyForBetaReview: true,
-    note: "Apple reviews the build (usually within a day). Once approved, external groups that have this build can install it. Add the build to a group with asc_testflight_add_build_to_group if you have not already.",
-    ...preview
-  };
-}
-
-// subs.js
-var qs3 = (o) => {
-  const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
-  return e.length ? `?${e.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&")}` : "";
-};
-var opFor3 = (method, path7) => {
-  const op = findOperation(method, path7);
-  if (!op) throw new Error(`Apple's API has no ${method} ${path7}.`);
-  return op;
-};
-var enc3 = encodeURIComponent;
+var enc2 = encodeURIComponent;
 async function getAll(deps, path7, { pages = 6 } = {}) {
   const data = [];
   const included = [];
@@ -38524,7 +38249,7 @@ async function getAll(deps, path7, { pages = 6 } = {}) {
   return { data, included };
 }
 async function subscriptionPrices(deps, { subscriptionId: subscriptionId2, territory }) {
-  const { data, included } = await getAll(deps, `/v1/subscriptions/${enc3(subscriptionId2)}/prices${qs3({ include: "subscriptionPricePoint,territory", limit: 200 })}`);
+  const { data, included } = await getAll(deps, `/v1/subscriptions/${enc2(subscriptionId2)}/prices${qs2({ include: "subscriptionPricePoint,territory", limit: 200 })}`);
   const byId = (type) => new Map(included.filter((i) => i.type === type).map((i) => [i.id, i]));
   const points = byId("subscriptionPricePoints");
   const territories = byId("territories");
@@ -38558,7 +38283,7 @@ async function subscriptionPrices(deps, { subscriptionId: subscriptionId2, terri
   };
 }
 async function findPricePoint(deps, { subscriptionId: subscriptionId2, territory = "USA", amount }) {
-  const { data } = await getAll(deps, `/v1/subscriptions/${enc3(subscriptionId2)}/pricePoints${qs3({ "filter[territory]": territory, limit: 200 })}`, { pages: 8 });
+  const { data } = await getAll(deps, `/v1/subscriptions/${enc2(subscriptionId2)}/pricePoints${qs2({ "filter[territory]": territory, limit: 200 })}`, { pages: 8 });
   const points = data.map((p) => ({ id: p.id, customerPrice: p.attributes?.customerPrice, proceeds: p.attributes?.proceeds }));
   if (amount === void 0) return { territory, points };
   const want = Number(amount);
@@ -38569,17 +38294,17 @@ async function findPricePoint(deps, { subscriptionId: subscriptionId2, territory
 }
 async function subscriptionOverview(deps, { appId: appId2 }) {
   const app = await resolveApp(deps, appId2);
-  const groups = list(await deps.get(`/v1/apps/${enc3(app)}/subscriptionGroups${qs3({ limit: 50 })}`));
+  const groups = list(await deps.get(`/v1/apps/${enc2(app)}/subscriptionGroups${qs2({ limit: 50 })}`));
   const out = [];
   for (const g of groups) {
-    const subs = list(await deps.get(`/v1/subscriptionGroups/${enc3(g.id)}/subscriptions${qs3({ limit: 50 })}`)).slice(0, 30);
+    const subs = list(await deps.get(`/v1/subscriptionGroups/${enc2(g.id)}/subscriptions${qs2({ limit: 50 })}`)).slice(0, 30);
     const rows = [];
     for (const s of subs) {
       const [locs, intro, promo, codes, prices] = await Promise.all([
-        deps.get(`/v1/subscriptions/${enc3(s.id)}/subscriptionLocalizations${qs3({ limit: 50 })}`).catch(() => ({ data: [] })),
-        deps.get(`/v1/subscriptions/${enc3(s.id)}/introductoryOffers${qs3({ limit: 50 })}`).catch(() => ({ data: [] })),
-        deps.get(`/v1/subscriptions/${enc3(s.id)}/promotionalOffers${qs3({ limit: 50 })}`).catch(() => ({ data: [] })),
-        deps.get(`/v1/subscriptions/${enc3(s.id)}/offerCodes${qs3({ limit: 50 })}`).catch(() => ({ data: [] })),
+        deps.get(`/v1/subscriptions/${enc2(s.id)}/subscriptionLocalizations${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
+        deps.get(`/v1/subscriptions/${enc2(s.id)}/introductoryOffers${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
+        deps.get(`/v1/subscriptions/${enc2(s.id)}/promotionalOffers${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
+        deps.get(`/v1/subscriptions/${enc2(s.id)}/offerCodes${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
         subscriptionPrices(deps, { subscriptionId: s.id, territory: "USA" }).catch(() => null)
       ]);
       rows.push({
@@ -38621,7 +38346,7 @@ async function prepareSetPrice(deps, { subscriptionId: subscriptionId2, territor
   const nowBy = new Map(current.current.map((r) => [r.territory, r]));
   let targets = [{ territory, pricePointId: basePoint.id, customerPrice }];
   if (allTerritories) {
-    const eq = await getAll(deps, `/v1/subscriptionPricePoints/${enc3(basePoint.id)}/equalizations${qs3({ include: "territory", limit: 200 })}`, { pages: 5 });
+    const eq = await getAll(deps, `/v1/subscriptionPricePoints/${enc2(basePoint.id)}/equalizations${qs2({ include: "territory", limit: 200 })}`, { pages: 5 });
     const terr = new Map(eq.included.filter((i) => i.type === "territories").map((i) => [i.id, i]));
     targets = [
       ...targets,
@@ -38679,7 +38404,7 @@ async function prepareEditSubscription(deps, { subscriptionId: subscriptionId2, 
   if (!entries.length) throw new Error(`Provide at least one field: ${allowed.join(", ")}.`);
   for (const [k] of entries) if (!allowed.includes(k)) throw new Error(`Cannot change "${k}" here. Allowed: ${allowed.join(", ")}.`);
   const preview = await prepareChange({
-    op: opFor3("PATCH", "/v1/subscriptions/{id}"),
+    op: opFor2("PATCH", "/v1/subscriptions/{id}"),
     pathParams: { id: subscriptionId2 },
     body: { data: { type: "subscriptions", id: subscriptionId2, attributes: Object.fromEntries(entries) } },
     deps
@@ -38698,11 +38423,11 @@ async function prepareEditSubscriptionLocalization(deps, { subscriptionId: subsc
     if (description.length > 45) throw new Error("A subscription description may be at most 45 characters.");
     attrs.description = description;
   }
-  const locs = list(await deps.get(`/v1/subscriptions/${enc3(subscriptionId2)}/subscriptionLocalizations${qs3({ limit: 50 })}`));
+  const locs = list(await deps.get(`/v1/subscriptions/${enc2(subscriptionId2)}/subscriptionLocalizations${qs2({ limit: 50 })}`));
   const hit = locs.find((l) => l.locale === locale);
   if (hit) {
     return prepareChange({
-      op: opFor3("PATCH", "/v1/subscriptionLocalizations/{id}"),
+      op: opFor2("PATCH", "/v1/subscriptionLocalizations/{id}"),
       pathParams: { id: hit.id },
       body: { data: { type: "subscriptionLocalizations", id: hit.id, attributes: attrs } },
       deps
@@ -38710,7 +38435,7 @@ async function prepareEditSubscriptionLocalization(deps, { subscriptionId: subsc
   }
   if (!attrs.name || attrs.description === void 0) throw new Error(`No ${locale} localization exists yet; creating one needs both name and description.`);
   const preview = await prepareChange({
-    op: opFor3("POST", "/v1/subscriptionLocalizations"),
+    op: opFor2("POST", "/v1/subscriptionLocalizations"),
     body: {
       data: {
         type: "subscriptionLocalizations",
@@ -38735,10 +38460,817 @@ async function prepareIntroOffer(deps, { subscriptionId: subscriptionId2, offerM
     relationships.subscriptionPricePoint = { data: { type: "subscriptionPricePoints", id: pp.match.id } };
   }
   return prepareChange({
-    op: opFor3("POST", "/v1/subscriptionIntroductoryOffers"),
+    op: opFor2("POST", "/v1/subscriptionIntroductoryOffers"),
     body: { data: { type: "subscriptionIntroductoryOffers", attributes, relationships } },
     deps
   });
+}
+
+// marketing.js
+var enc3 = encodeURIComponent;
+var qs3 = (o) => {
+  const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
+  return e.length ? `?${e.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&")}` : "";
+};
+var opFor3 = (method, path7) => {
+  const op = findOperation(method, path7);
+  if (!op) throw new Error(`Apple's API has no ${method} ${path7}.`);
+  return op;
+};
+var DATE2 = /^\d{4}-\d{2}-\d{2}$/;
+var DURATIONS = ["THREE_DAYS", "ONE_WEEK", "TWO_WEEKS", "ONE_MONTH", "TWO_MONTHS", "THREE_MONTHS", "SIX_MONTHS", "ONE_YEAR"];
+var OFFER_MODES = ["FREE_TRIAL", "PAY_AS_YOU_GO", "PAY_UP_FRONT"];
+async function findPage(deps, app, page) {
+  const pages = list(await deps.get(`/v1/apps/${enc3(app)}/appCustomProductPages${qs3({ limit: 50 })}`));
+  const hit = pages.find((p) => p.id === page || p.name === page);
+  if (!hit) throw new Error(`No custom product page "${page}". Pages: ${pages.map((p) => p.name).join(", ") || "none"}.`);
+  return hit;
+}
+async function pageVersions(deps, pageId) {
+  return list(await deps.get(`/v1/appCustomProductPages/${enc3(pageId)}/appCustomProductPageVersions${qs3({ limit: 20 })}`));
+}
+async function customPagesOverview(deps, { appId: appId2 }) {
+  const app = await resolveApp(deps, appId2);
+  const pages = list(await deps.get(`/v1/apps/${enc3(app)}/appCustomProductPages${qs3({ limit: 50 })}`));
+  const out = [];
+  for (const p of pages) {
+    const versions = await pageVersions(deps, p.id).catch(() => []);
+    const latest = versions[0];
+    const locs = latest ? list(await deps.get(`/v1/appCustomProductPageVersions/${enc3(latest.id)}/appCustomProductPageLocalizations${qs3({ limit: 50 })}`).catch(() => ({ data: [] }))) : [];
+    out.push({
+      id: p.id,
+      name: p.name,
+      visible: p.visible,
+      url: p.url,
+      versions: versions.map((v) => ({ id: v.id, version: v.version, state: v.state, deepLink: v.deepLink })),
+      locales: locs.map((l) => ({ locale: l.locale, promotionalText: l.promotionalText }))
+    });
+  }
+  return { app, pages: out, note: "Apple allows up to 70 custom product pages. A page is public (and usable in ads) once Apple approves it." };
+}
+async function prepareCreateCustomPage(deps, { appId: appId2, name, locale = "en-US", promotionalText, deepLink, copyFromLiveVersion = true }) {
+  if (!name || name.length > 64) throw new Error("Give the page a name (64 characters max); only you see it.");
+  if (promotionalText && promotionalText.length > 170) throw new Error("promotionalText may be at most 170 characters.");
+  const app = await resolveApp(deps, appId2);
+  const relationships = {
+    app: { data: { type: "apps", id: app } },
+    appCustomProductPageVersions: { data: [{ type: "appCustomProductPageVersions", id: "${new-version}" }] }
+  };
+  let template = null;
+  if (copyFromLiveVersion) {
+    const versions = list(await deps.get(`/v1/apps/${enc3(app)}/appStoreVersions${qs3({ "filter[appStoreState]": "READY_FOR_SALE", limit: 1 })}`));
+    if (versions[0]) {
+      template = versions[0].versionString;
+      relationships.appStoreVersionTemplate = { data: { type: "appStoreVersions", id: versions[0].id } };
+    }
+  }
+  const versionAttrs = deepLink ? { deepLink } : void 0;
+  const body = {
+    data: { type: "appCustomProductPages", attributes: { name }, relationships },
+    included: [
+      {
+        type: "appCustomProductPageVersions",
+        id: "${new-version}",
+        ...versionAttrs ? { attributes: versionAttrs } : {},
+        relationships: { appCustomProductPageLocalizations: { data: [{ type: "appCustomProductPageLocalizations", id: "${new-locale}" }] } }
+      },
+      {
+        type: "appCustomProductPageLocalizations",
+        id: "${new-locale}",
+        attributes: { locale, ...promotionalText ? { promotionalText } : {} }
+      }
+    ]
+  };
+  const preview = await prepareChange({ op: opFor3("POST", "/v1/appCustomProductPages"), body, deps });
+  return {
+    page: name,
+    locale,
+    startsFrom: template ? `a copy of the live version ${template} (its screenshots and previews)` : "empty (add screenshots with asc_upload_screenshots and customProductPage)",
+    note: "The new page is a private draft until you submit it with asc_submit_custom_page and Apple approves it.",
+    ...preview
+  };
+}
+async function prepareEditCustomPageText(deps, { appId: appId2, page, locale = "en-US", promotionalText }) {
+  if (typeof promotionalText !== "string" || promotionalText.length > 170) throw new Error("promotionalText is required, 170 characters max.");
+  const app = await resolveApp(deps, appId2);
+  const p = await findPage(deps, app, page);
+  const draft = (await pageVersions(deps, p.id)).find((v) => ["PREPARE_FOR_SUBMISSION", "REJECTED"].includes(v.state));
+  if (!draft) throw new Error(`"${p.name}" has no editable draft.`);
+  const locs = list(await deps.get(`/v1/appCustomProductPageVersions/${enc3(draft.id)}/appCustomProductPageLocalizations${qs3({ limit: 50 })}`));
+  const hit = locs.find((l) => l.locale === locale);
+  if (hit) {
+    return {
+      page: p.name,
+      ...await prepareChange({
+        op: opFor3("PATCH", "/v1/appCustomProductPageLocalizations/{id}"),
+        pathParams: { id: hit.id },
+        body: { data: { type: "appCustomProductPageLocalizations", id: hit.id, attributes: { promotionalText } } },
+        deps
+      })
+    };
+  }
+  return {
+    page: p.name,
+    creatingNewLocale: true,
+    ...await prepareChange({
+      op: opFor3("POST", "/v1/appCustomProductPageLocalizations"),
+      body: {
+        data: {
+          type: "appCustomProductPageLocalizations",
+          attributes: { locale, promotionalText },
+          relationships: { appCustomProductPageVersion: { data: { type: "appCustomProductPageVersions", id: draft.id } } }
+        }
+      },
+      deps
+    })
+  };
+}
+async function prepareSubmitCustomPage(deps, { appId: appId2, page, platform = "IOS" }) {
+  const app = await resolveApp(deps, appId2);
+  const p = await findPage(deps, app, page);
+  const draft = (await pageVersions(deps, p.id)).find((v) => ["PREPARE_FOR_SUBMISSION", "REJECTED"].includes(v.state));
+  if (!draft) throw new Error(`"${p.name}" has no draft to submit.`);
+  const open2 = list(
+    await deps.get(`/v1/apps/${enc3(app)}/reviewSubmissions${qs3({ "filter[state]": "READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES", "filter[platform]": platform, limit: 10 })}`)
+  );
+  const busy = open2.find((s) => s.state !== "READY_FOR_REVIEW");
+  if (busy) {
+    return {
+      allowed: false,
+      reason: `Another submission is already ${busy.state}. Apple allows one at a time per platform; submit the page after that review finishes.`
+    };
+  }
+  const draftSub = open2.find((s) => s.state === "READY_FOR_REVIEW");
+  const steps = [];
+  let subRef = draftSub?.id;
+  if (!draftSub) {
+    steps.push({
+      label: "Create a review submission",
+      method: "POST",
+      path: "/v1/reviewSubmissions",
+      body: { data: { type: "reviewSubmissions", attributes: { platform }, relationships: { app: { data: { type: "apps", id: app } } } } }
+    });
+    subRef = "{{0.id}}";
+  }
+  steps.push({
+    label: `Add custom product page "${p.name}"`,
+    method: "POST",
+    path: "/v1/reviewSubmissionItems",
+    body: {
+      data: {
+        type: "reviewSubmissionItems",
+        relationships: {
+          reviewSubmission: { data: { type: "reviewSubmissions", id: subRef } },
+          appCustomProductPageVersion: { data: { type: "appCustomProductPageVersions", id: draft.id } }
+        }
+      }
+    }
+  });
+  steps.push({
+    label: "Submit for App Review",
+    method: "PATCH",
+    path: "/v1/reviewSubmissions/{id}",
+    pathParams: { id: subRef },
+    body: { data: { type: "reviewSubmissions", id: subRef, attributes: { submitted: true } } }
+  });
+  const plan = await preparePlan({ title: `Submit custom product page "${p.name}" for App Review`, steps, deps });
+  return {
+    ...plan,
+    page: p.name,
+    joinsExistingDraft: draftSub ? "An unsent review submission already exists; the page is added to it and EVERYTHING in it is submitted together. Check what else is in it first." : void 0
+  };
+}
+async function offerPrices(deps, { subscriptionId: subscriptionId2, offerMode, territories = "all", amount, baseTerritory = "USA", priceType }) {
+  let terr = territories;
+  if (terr === "all") {
+    const current = await subscriptionPrices(deps, { subscriptionId: subscriptionId2 });
+    terr = [...new Set(current.current.map((r) => r.territory))];
+    if (!terr.length) throw new Error("This subscription has no prices yet, so there are no territories to offer it in.");
+  }
+  if (!Array.isArray(terr) || !terr.length) throw new Error('territories must be "all" or a list such as ["USA", "CAN"].');
+  const pointBy = /* @__PURE__ */ new Map();
+  if (offerMode !== "FREE_TRIAL") {
+    if (amount === void 0) throw new Error(`A ${offerMode} offer needs amount: the price in ${baseTerritory}, e.g. 0.99.`);
+    const found = await findPricePoint(deps, { subscriptionId: subscriptionId2, territory: baseTerritory, amount });
+    if (!found.match) throw new Error(`No ${baseTerritory} price point is exactly ${amount}. Nearest: ${found.nearest.map((n) => n.customerPrice).join(", ")}.`);
+    pointBy.set(baseTerritory, { id: found.match.id, price: found.match.customerPrice });
+    const eq = await getAll(deps, `/v1/subscriptionPricePoints/${enc3(found.match.id)}/equalizations${qs3({ include: "territory", limit: 200 })}`, { pages: 5 });
+    for (const pt of eq.data) {
+      const t = pt.relationships?.territory?.data?.id;
+      if (t && !pointBy.has(t)) pointBy.set(t, { id: pt.id, price: pt.attributes?.customerPrice });
+    }
+    const missing = terr.filter((t) => !pointBy.has(t));
+    if (missing.length) throw new Error(`Apple has no equalized price for: ${missing.join(", ")}. Leave them out or pick another amount.`);
+  }
+  const refs = [];
+  const included = [];
+  terr.forEach((t, i) => {
+    const id = `\${price-${i}}`;
+    refs.push({ type: priceType, id });
+    const relationships = { territory: { data: { type: "territories", id: t } } };
+    if (pointBy.has(t)) relationships.subscriptionPricePoint = { data: { type: "subscriptionPricePoints", id: pointBy.get(t).id } };
+    included.push({ type: priceType, id, relationships });
+  });
+  const table = terr.map((t) => ({ territory: t, price: offerMode === "FREE_TRIAL" ? "free" : pointBy.get(t).price }));
+  return { refs, included, table };
+}
+function checkOfferBasics({ offerMode, duration: duration3, numberOfPeriods }) {
+  if (!OFFER_MODES.includes(offerMode)) throw new Error(`offerMode must be one of ${OFFER_MODES.join(", ")}.`);
+  if (!DURATIONS.includes(duration3)) throw new Error(`duration must be one of ${DURATIONS.join(", ")}.`);
+  if (!Number.isInteger(numberOfPeriods) || numberOfPeriods < 1) throw new Error("numberOfPeriods must be a whole number of at least 1.");
+}
+var offerSummary = (o) => o.offerMode === "FREE_TRIAL" ? `free for ${o.numberOfPeriods} x ${o.duration}` : o.offerMode === "PAY_UP_FRONT" ? `one payment for ${o.numberOfPeriods} x ${o.duration}` : `a reduced price each period for ${o.numberOfPeriods} x ${o.duration}`;
+async function offerCodesOverview(deps, { subscriptionId: subscriptionId2 }) {
+  const codes = list(await deps.get(`/v1/subscriptions/${enc3(subscriptionId2)}/offerCodes${qs3({ limit: 50 })}`));
+  const out = [];
+  for (const c of codes) {
+    const [oneTime, custom2] = await Promise.all([
+      deps.get(`/v1/subscriptionOfferCodes/${enc3(c.id)}/oneTimeUseCodes${qs3({ limit: 50 })}`).catch(() => ({ data: [] })),
+      deps.get(`/v1/subscriptionOfferCodes/${enc3(c.id)}/customCodes${qs3({ limit: 50 })}`).catch(() => ({ data: [] }))
+    ]);
+    out.push({
+      id: c.id,
+      name: c.name,
+      active: c.active,
+      offer: offerSummary(c),
+      customerEligibilities: c.customerEligibilities,
+      oneTimeCodeBatches: list(oneTime).map((b) => ({ id: b.id, codes: b.numberOfCodes, expires: b.expirationDate, created: toLocalTime(b.createdDate), active: b.active })),
+      customCodes: list(custom2).map((b) => ({ id: b.id, code: b.customCode, redemptions: b.numberOfCodes, expires: b.expirationDate, active: b.active }))
+    });
+  }
+  return { subscriptionId: subscriptionId2, offerCodes: out, note: "One-time code values are downloaded in App Store Connect (Subscriptions > Offer Codes)." };
+}
+async function prepareCreateOfferCode(deps, { subscriptionId: subscriptionId2, name, customerEligibilities = ["NEW"], offerEligibility = "STACK_WITH_INTRO_OFFERS", offerMode = "FREE_TRIAL", duration: duration3 = "ONE_MONTH", numberOfPeriods = 1, territories = "all", amount }) {
+  if (!name || name.length > 64) throw new Error("Give the offer a name (64 characters max); only you see it.");
+  checkOfferBasics({ offerMode, duration: duration3, numberOfPeriods });
+  const elig = ["NEW", "EXISTING", "EXPIRED"];
+  if (!Array.isArray(customerEligibilities) || !customerEligibilities.length || customerEligibilities.some((e) => !elig.includes(e))) {
+    throw new Error(`customerEligibilities must list one or more of ${elig.join(", ")}.`);
+  }
+  const prices = await offerPrices(deps, { subscriptionId: subscriptionId2, offerMode, territories, amount, priceType: "subscriptionOfferCodePrices" });
+  const attributes = { name, customerEligibilities, offerEligibility, offerMode, duration: duration3, numberOfPeriods };
+  const preview = await prepareChange({
+    op: opFor3("POST", "/v1/subscriptionOfferCodes"),
+    body: {
+      data: {
+        type: "subscriptionOfferCodes",
+        attributes,
+        relationships: { subscription: { data: { type: "subscriptions", id: subscriptionId2 } }, prices: { data: prices.refs } }
+      },
+      included: prices.included
+    },
+    deps
+  });
+  return {
+    offer: `${name}: ${offerSummary(attributes)} for ${customerEligibilities.join(" / ").toLowerCase()} customers`,
+    territories: prices.table.length,
+    priceTable: prices.table.slice(0, 40),
+    note: "This creates the offer only. Generate redeemable codes for it with asc_generate_offer_codes.",
+    ...preview
+  };
+}
+async function prepareGenerateOfferCodes(deps, { offerCodeId, numberOfCodes, expirationDate, customCode }) {
+  if (!offerCodeId) throw new Error("Pass offerCodeId (from asc_offer_codes_overview).");
+  if (!Number.isInteger(numberOfCodes) || numberOfCodes < 1) throw new Error("numberOfCodes must be a whole number of at least 1.");
+  if (expirationDate && !DATE2.test(expirationDate)) throw new Error("expirationDate must look like 2026-12-31.");
+  if (customCode) {
+    if (!/^[A-Za-z0-9]{1,64}$/.test(customCode)) throw new Error("A custom code may only use letters and digits (64 max).");
+    return {
+      kind: `custom code "${customCode}", redeemable ${numberOfCodes} time(s)`,
+      ...await prepareChange({
+        op: opFor3("POST", "/v1/subscriptionOfferCodeCustomCodes"),
+        body: {
+          data: {
+            type: "subscriptionOfferCodeCustomCodes",
+            attributes: { customCode: customCode.toUpperCase(), numberOfCodes, ...expirationDate ? { expirationDate } : {} },
+            relationships: { offerCode: { data: { type: "subscriptionOfferCodes", id: offerCodeId } } }
+          }
+        },
+        deps
+      })
+    };
+  }
+  if (!expirationDate) throw new Error("One-time codes need an expirationDate, e.g. 2026-12-31.");
+  return {
+    kind: `${numberOfCodes} one-time code(s), expiring ${expirationDate}`,
+    note: "Download the code values in App Store Connect once Apple has generated them.",
+    ...await prepareChange({
+      op: opFor3("POST", "/v1/subscriptionOfferCodeOneTimeUseCodes"),
+      body: {
+        data: {
+          type: "subscriptionOfferCodeOneTimeUseCodes",
+          attributes: { numberOfCodes, expirationDate },
+          relationships: { offerCode: { data: { type: "subscriptionOfferCodes", id: offerCodeId } } }
+        }
+      },
+      deps
+    })
+  };
+}
+async function prepareSetOfferCodeActive(deps, { offerCodeId, active }) {
+  if (typeof active !== "boolean") throw new Error("Pass active: true or false.");
+  return prepareChange({
+    op: opFor3("PATCH", "/v1/subscriptionOfferCodes/{id}"),
+    pathParams: { id: offerCodeId },
+    body: { data: { type: "subscriptionOfferCodes", id: offerCodeId, attributes: { active } } },
+    deps
+  });
+}
+async function prepareCreatePromotionalOffer(deps, { subscriptionId: subscriptionId2, name, offerCode, offerMode = "PAY_AS_YOU_GO", duration: duration3 = "ONE_MONTH", numberOfPeriods = 1, territories = "all", amount }) {
+  if (!name || !offerCode) throw new Error("Pass name (only you see it) and offerCode (the identifier your app uses to request the offer).");
+  if (!/^[A-Za-z0-9_.-]{1,64}$/.test(offerCode)) throw new Error("offerCode may use letters, digits, dots, dashes and underscores (64 max).");
+  checkOfferBasics({ offerMode, duration: duration3, numberOfPeriods });
+  const prices = await offerPrices(deps, { subscriptionId: subscriptionId2, offerMode, territories, amount, priceType: "subscriptionPromotionalOfferPrices" });
+  const attributes = { name, offerCode, offerMode, duration: duration3, numberOfPeriods };
+  const preview = await prepareChange({
+    op: opFor3("POST", "/v1/subscriptionPromotionalOffers"),
+    body: {
+      data: {
+        type: "subscriptionPromotionalOffers",
+        attributes,
+        relationships: { subscription: { data: { type: "subscriptions", id: subscriptionId2 } }, prices: { data: prices.refs } }
+      },
+      included: prices.included
+    },
+    deps
+  });
+  return {
+    offer: `${name} (${offerCode}): ${offerSummary(attributes)}`,
+    territories: prices.table.length,
+    priceTable: prices.table.slice(0, 40),
+    note: "Promotional offers only reach customers when your app requests them with a signed offer. Creating one changes nothing for customers by itself.",
+    ...preview
+  };
+}
+async function prepareCreateWinBackOffer(deps, {
+  subscriptionId: subscriptionId2,
+  referenceName,
+  offerId,
+  offerMode = "FREE_TRIAL",
+  duration: duration3 = "ONE_MONTH",
+  periodCount = 1,
+  paidMonthsBefore = 1,
+  lapsedMinMonths = 1,
+  lapsedMaxMonths = 24,
+  waitBetweenOffersMonths,
+  startDate,
+  endDate,
+  priority = "NORMAL",
+  promote = false,
+  territories = "all",
+  amount
+}) {
+  if (!referenceName || !offerId) throw new Error("Pass referenceName (only you see it) and offerId (a unique identifier, e.g. winback_2026_q4).");
+  checkOfferBasics({ offerMode, duration: duration3, numberOfPeriods: periodCount });
+  if (!startDate || !DATE2.test(startDate)) throw new Error("startDate is required, like 2026-11-01.");
+  if (endDate && !DATE2.test(endDate)) throw new Error("endDate must look like 2027-01-31.");
+  if (!(lapsedMinMonths >= 1 && lapsedMaxMonths >= lapsedMinMonths)) throw new Error("lapsedMinMonths must be at least 1 and no more than lapsedMaxMonths.");
+  const prices = await offerPrices(deps, { subscriptionId: subscriptionId2, offerMode, territories, amount, priceType: "winBackOfferPrices" });
+  const attributes = {
+    referenceName,
+    offerId,
+    offerMode,
+    duration: duration3,
+    periodCount,
+    customerEligibilityPaidSubscriptionDurationInMonths: paidMonthsBefore,
+    customerEligibilityTimeSinceLastSubscribedInMonths: { minimum: lapsedMinMonths, maximum: lapsedMaxMonths },
+    ...waitBetweenOffersMonths ? { customerEligibilityWaitBetweenOffersInMonths: waitBetweenOffersMonths } : {},
+    startDate,
+    ...endDate ? { endDate } : {},
+    priority,
+    promotionIntent: promote ? "USE_AUTO_GENERATED_ASSETS" : "NOT_PROMOTED"
+  };
+  const preview = await prepareChange({
+    op: opFor3("POST", "/v1/winBackOffers"),
+    body: {
+      data: {
+        type: "winBackOffers",
+        attributes,
+        relationships: { subscription: { data: { type: "subscriptions", id: subscriptionId2 } }, prices: { data: prices.refs } }
+      },
+      included: prices.included
+    },
+    deps
+  });
+  return {
+    offer: `${referenceName}: ${offerSummary({ offerMode, duration: duration3, numberOfPeriods: periodCount })}`,
+    whoSeesIt: `People who paid for at least ${paidMonthsBefore} month(s) and lapsed ${lapsedMinMonths} to ${lapsedMaxMonths} months ago, from ${startDate}${endDate ? ` to ${endDate}` : ""}.${promote ? " Apple may also promote it on the App Store." : ""}`,
+    territories: prices.table.length,
+    priceTable: prices.table.slice(0, 40),
+    ...preview
+  };
+}
+
+// extras.js
+var enc4 = encodeURIComponent;
+var qs4 = (o) => {
+  const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
+  return e.length ? `?${e.map(([k, v]) => `${k}=${enc4(String(v))}`).join("&")}` : "";
+};
+var opFor4 = (method, path7) => {
+  const op = findOperation(method, path7);
+  if (!op) throw new Error(`Apple's API has no ${method} ${path7}.`);
+  return op;
+};
+var clone2 = (v) => v === void 0 ? void 0 : JSON.parse(JSON.stringify(v));
+var HIDDEN = "(hidden)";
+async function reviewInbox(deps, { appId: appId2, limit = 20, unrepliedOnly = true }) {
+  const app = await resolveApp(deps, appId2);
+  const body = await deps.get(
+    `/v1/apps/${enc4(app)}/customerReviews${qs4({ sort: "-createdDate", include: "response", limit: Math.min(200, Math.max(50, limit * 3)) })}`
+  );
+  const responses = new Map((body.included || []).filter((i) => i.type === "customerReviewResponses").map((r) => [r.id, flat(r)]));
+  const rows = (body.data || []).map((r) => {
+    const respId = r.relationships?.response?.data?.id;
+    const resp = respId ? responses.get(respId) : null;
+    const a = r.attributes || {};
+    return {
+      id: r.id,
+      rating: a.rating,
+      title: a.title,
+      body: a.body,
+      reviewer: a.reviewerNickname,
+      territory: a.territory,
+      createdLocal: toLocalTime(a.createdDate),
+      replied: Boolean(respId),
+      reply: resp ? { text: resp.responseBody, state: resp.state, lastModifiedLocal: toLocalTime(resp.lastModifiedDate) } : null
+    };
+  });
+  const shown = (unrepliedOnly ? rows.filter((r) => !r.replied) : rows).slice(0, limit);
+  return { app, unrepliedOnly, totalChecked: rows.length, unreplied: rows.filter((r) => !r.replied).length, reviews: shown };
+}
+async function prepareReplyToReview(deps, { reviewId, text }) {
+  if (!reviewId) throw new Error("Pass reviewId (from asc_review_inbox).");
+  if (typeof text !== "string" || !text.trim()) throw new Error("The reply needs text.");
+  if (text.length > 5970) throw new Error(`The reply is ${text.length} characters; Apple allows at most 5970.`);
+  let review;
+  try {
+    review = flat((await deps.get(`/v1/customerReviews/${enc4(reviewId)}`)).data);
+  } catch {
+    throw new Error(`Review ${reviewId} was not found.`);
+  }
+  let existing = null;
+  try {
+    const r = await deps.get(`/v1/customerReviews/${enc4(reviewId)}/response`);
+    existing = r.data ? flat(r.data) : null;
+  } catch {
+    existing = null;
+  }
+  const preview = await prepareChange({
+    op: opFor4("POST", "/v1/customerReviewResponses"),
+    body: {
+      data: {
+        type: "customerReviewResponses",
+        attributes: { responseBody: text },
+        relationships: { review: { data: { type: "customerReviews", id: reviewId } } }
+      }
+    },
+    deps
+  });
+  return {
+    ...preview,
+    review: { rating: review.rating, title: review.title, body: review.body, reviewer: review.reviewerNickname, territory: review.territory, createdLocal: toLocalTime(review.createdDate) },
+    existingReply: existing ? existing.responseBody : null,
+    willBePublic: "This reply is visible to everyone on the App Store, under the developer name.",
+    note: existing ? "Apple replaces the existing reply with this one." : void 0
+  };
+}
+var REVIEW_FIELDS = ["contactFirstName", "contactLastName", "contactPhone", "contactEmail", "demoAccountRequired", "demoAccountName", "demoAccountPassword", "notes"];
+function checkReviewFields(fields) {
+  const entries = Object.entries(fields || {}).filter(([, v]) => v !== void 0);
+  if (!entries.length) throw new Error(`Provide at least one field: ${REVIEW_FIELDS.join(", ")}.`);
+  for (const [k, v] of entries) {
+    if (!REVIEW_FIELDS.includes(k)) throw new Error(`Unknown field "${k}". Allowed: ${REVIEW_FIELDS.join(", ")}.`);
+    if (k === "demoAccountRequired") {
+      if (typeof v !== "boolean") throw new Error("demoAccountRequired must be true or false.");
+    } else if (typeof v !== "string") {
+      throw new Error(`"${k}" must be text.`);
+    }
+  }
+  const f = Object.fromEntries(entries);
+  if (f.contactEmail !== void 0 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.contactEmail)) throw new Error("contactEmail does not look like an email address.");
+  if (f.contactPhone !== void 0 && !/^\+?[0-9 ()\-.]{7,20}$/.test(f.contactPhone)) throw new Error("contactPhone must be a phone number such as +15551234567.");
+  if (f.notes !== void 0 && f.notes.length > 4e3) throw new Error(`notes is ${f.notes.length} characters; Apple allows at most 4000.`);
+  return f;
+}
+function maskReviewPreview(preview) {
+  const p = clone2(preview);
+  if (p.changes) {
+    for (const c of p.changes) if (c.field === "demoAccountPassword") {
+      c.from = c.from ? HIDDEN : c.from;
+      c.to = HIDDEN;
+    }
+  }
+  if (p.before && "demoAccountPassword" in p.before) p.before.demoAccountPassword = p.before.demoAccountPassword ? HIDDEN : p.before.demoAccountPassword;
+  const attrs = p.requestBody?.data?.attributes;
+  if (attrs && "demoAccountPassword" in attrs) attrs.demoAccountPassword = HIDDEN;
+  return p;
+}
+async function prepareReviewDetails(deps, { appId: appId2, version: version2, fields, platform = "IOS" }) {
+  const attrs = checkReviewFields(fields);
+  const app = await resolveApp(deps, appId2);
+  const v = await findVersion(deps, { appId: app, version: version2, platform, mode: "editable" });
+  let detail = null;
+  try {
+    const r = await deps.get(`/v1/appStoreVersions/${enc4(v.id)}/appStoreReviewDetail`);
+    detail = r.data ? flat(r.data) : null;
+  } catch {
+    detail = null;
+  }
+  const context = { version: v.versionString, versionState: v.appStoreState || v.appVersionState };
+  if (detail) {
+    const preview2 = await prepareChange({
+      op: opFor4("PATCH", "/v1/appStoreReviewDetails/{id}"),
+      pathParams: { id: detail.id },
+      body: { data: { type: "appStoreReviewDetails", id: detail.id, attributes: attrs } },
+      deps
+    });
+    return { ...context, ...maskReviewPreview(preview2) };
+  }
+  const preview = await prepareChange({
+    op: opFor4("POST", "/v1/appStoreReviewDetails"),
+    body: {
+      data: {
+        type: "appStoreReviewDetails",
+        attributes: attrs,
+        relationships: { appStoreVersion: { data: { type: "appStoreVersions", id: v.id } } }
+      }
+    },
+    deps
+  });
+  return { ...context, creating: true, ...maskReviewPreview(preview) };
+}
+var INFO_LIMITS = { name: 30, subtitle: 30 };
+var INFO_FIELDS = ["name", "subtitle", "privacyPolicyUrl", "privacyChoicesUrl", "privacyPolicyText"];
+function checkInfoFields(fields) {
+  const entries = Object.entries(fields || {}).filter(([, v]) => v !== void 0);
+  if (!entries.length) throw new Error(`Provide at least one field: ${INFO_FIELDS.join(", ")}.`);
+  for (const [k, v] of entries) {
+    if (!INFO_FIELDS.includes(k)) throw new Error(`Unknown field "${k}". Allowed: ${INFO_FIELDS.join(", ")}.`);
+    if (typeof v !== "string") throw new Error(`"${k}" must be text.`);
+    if (INFO_LIMITS[k] && v.length > INFO_LIMITS[k]) throw new Error(`"${k}" is ${v.length} characters; Apple allows at most ${INFO_LIMITS[k]}.`);
+    if (k.endsWith("Url") && v !== "" && !/^https:\/\/\S+$/.test(v)) throw new Error(`"${k}" must be a full https:// address.`);
+  }
+  return Object.fromEntries(entries);
+}
+async function prepareAppInfo(deps, { appId: appId2, locale = "en-US", fields }) {
+  const attrs = checkInfoFields(fields);
+  const app = await resolveApp(deps, appId2);
+  const infos = list(await deps.get(`/v1/apps/${enc4(app)}/appInfos${qs4({ limit: 10 })}`));
+  const stateOf4 = (i) => i.appStoreState || i.state;
+  const editable = infos.find((i) => EDITABLE_VERSION_STATES.has(stateOf4(i)));
+  if (!editable) {
+    throw new Error(
+      `App info can only be changed while a version is being prepared. Current states: ${infos.map((i) => stateOf4(i)).join(", ") || "none"}. Create the next version first (asc_create_version).`
+    );
+  }
+  const locs = list(await deps.get(`/v1/appInfos/${enc4(editable.id)}/appInfoLocalizations${qs4({ limit: 50 })}`));
+  const hit = locs.find((l) => l.locale === locale);
+  const context = { appInfoState: stateOf4(editable), locale };
+  if (hit) {
+    const preview2 = await prepareChange({
+      op: opFor4("PATCH", "/v1/appInfoLocalizations/{id}"),
+      pathParams: { id: hit.id },
+      body: { data: { type: "appInfoLocalizations", id: hit.id, attributes: attrs } },
+      deps
+    });
+    return { ...context, publicOnRelease: Boolean(attrs.name || attrs.subtitle), ...preview2 };
+  }
+  if (!attrs.name) throw new Error(`No ${locale} app info exists yet; creating one needs a name.`);
+  const preview = await prepareChange({
+    op: opFor4("POST", "/v1/appInfoLocalizations"),
+    body: {
+      data: {
+        type: "appInfoLocalizations",
+        attributes: { locale, ...attrs },
+        relationships: { appInfo: { data: { type: "appInfos", id: editable.id } } }
+      }
+    },
+    deps
+  });
+  return { ...context, creatingNewLocale: true, existingLocales: locs.map((l) => l.locale), ...preview };
+}
+async function findGroup(deps, app, group) {
+  const groups = list(await deps.get(`/v1/apps/${enc4(app)}/betaGroups${qs4({ limit: 50 })}`));
+  const hit = groups.find((g) => g.id === group || g.name === group);
+  if (!hit) throw new Error(`No TestFlight group "${group}". Groups: ${groups.map((g) => g.name).join(", ") || "none"}.`);
+  return hit;
+}
+async function findBuild(deps, app, buildNumber) {
+  if (!buildNumber) throw new Error('Pass buildNumber (for example "57").');
+  const b = list(await deps.get(`/v1/builds${qs4({ "filter[app]": app, "filter[version]": String(buildNumber), limit: 5 })}`))[0];
+  if (!b) throw new Error(`No build "${buildNumber}" found for this app.`);
+  return b;
+}
+async function testflightOverview(deps, { appId: appId2 }) {
+  const app = await resolveApp(deps, appId2);
+  const groups = list(await deps.get(`/v1/apps/${enc4(app)}/betaGroups${qs4({ limit: 50 })}`));
+  const out = [];
+  for (const g of groups) {
+    const [testers, builds] = await Promise.all([
+      deps.get(`/v1/betaGroups/${enc4(g.id)}/betaTesters${qs4({ limit: 1 })}`).catch(() => null),
+      deps.get(`/v1/betaGroups/${enc4(g.id)}/builds${qs4({ limit: 5 })}`).catch(() => null)
+    ]);
+    out.push({
+      id: g.id,
+      name: g.name,
+      internal: g.isInternalGroup,
+      publicLink: g.publicLinkEnabled ? g.publicLink : null,
+      hasAccessToAllBuilds: g.hasAccessToAllBuilds,
+      testers: testers?.meta?.paging?.total ?? null,
+      builds: builds ? list(builds).map((b) => ({ build: b.version, uploadedLocal: toLocalTime(b.uploadedDate), expired: b.expired })) : null
+    });
+  }
+  return { app, groups: out };
+}
+async function prepareTestflightNotes(deps, { appId: appId2, buildNumber, locale = "en-US", whatsNew }) {
+  if (typeof whatsNew !== "string" || !whatsNew.trim()) throw new Error("whatsNew needs text.");
+  if (whatsNew.length > 4e3) throw new Error(`whatsNew is ${whatsNew.length} characters; TestFlight allows at most 4000.`);
+  const app = await resolveApp(deps, appId2);
+  const build = await findBuild(deps, app, buildNumber);
+  const locs = list(await deps.get(`/v1/builds/${enc4(build.id)}/betaBuildLocalizations${qs4({ limit: 50 })}`));
+  const hit = locs.find((l) => l.locale === locale);
+  const context = { build: build.version, locale };
+  if (hit) {
+    return {
+      ...context,
+      ...await prepareChange({
+        op: opFor4("PATCH", "/v1/betaBuildLocalizations/{id}"),
+        pathParams: { id: hit.id },
+        body: { data: { type: "betaBuildLocalizations", id: hit.id, attributes: { whatsNew } } },
+        deps
+      })
+    };
+  }
+  return {
+    ...context,
+    creatingNewLocale: true,
+    ...await prepareChange({
+      op: opFor4("POST", "/v1/betaBuildLocalizations"),
+      body: {
+        data: {
+          type: "betaBuildLocalizations",
+          attributes: { locale, whatsNew },
+          relationships: { build: { data: { type: "builds", id: build.id } } }
+        }
+      },
+      deps
+    })
+  };
+}
+async function prepareAddTester(deps, { appId: appId2, email: email3, firstName, lastName, group }) {
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email3 || "")) throw new Error("Pass a valid email address.");
+  if (!group) throw new Error("Pass group (the TestFlight group name or id).");
+  const app = await resolveApp(deps, appId2);
+  const g = await findGroup(deps, app, group);
+  let existing = null;
+  try {
+    existing = list(await deps.get(`/v1/betaTesters${qs4({ "filter[email]": email3, limit: 1 })}`))[0] || null;
+  } catch {
+    existing = null;
+  }
+  const note = g.isInternalGroup ? "Internal group: the person must already be a user on your App Store Connect team." : "External group: Apple emails this person an invitation to TestFlight.";
+  if (existing) {
+    const preview2 = await prepareChange({
+      op: opFor4("POST", "/v1/betaGroups/{id}/relationships/betaTesters"),
+      pathParams: { id: g.id },
+      body: { data: [{ type: "betaTesters", id: existing.id }] },
+      deps
+    });
+    return { group: g.name, existingTester: true, note, ...preview2 };
+  }
+  const attributes = { email: email3 };
+  if (firstName) attributes.firstName = firstName;
+  if (lastName) attributes.lastName = lastName;
+  const preview = await prepareChange({
+    op: opFor4("POST", "/v1/betaTesters"),
+    body: {
+      data: {
+        type: "betaTesters",
+        attributes,
+        relationships: { betaGroups: { data: [{ type: "betaGroups", id: g.id }] } }
+      }
+    },
+    deps
+  });
+  return { group: g.name, existingTester: false, note, ...preview };
+}
+async function prepareAddBuildToGroup(deps, { appId: appId2, buildNumber, group }) {
+  const app = await resolveApp(deps, appId2);
+  const g = await findGroup(deps, app, group);
+  const build = await findBuild(deps, app, buildNumber);
+  if (build.processingState !== "VALID") throw new Error(`Build ${buildNumber} is ${build.processingState}, not VALID yet.`);
+  if (build.expired) throw new Error(`Build ${buildNumber} has expired.`);
+  const preview = await prepareChange({
+    op: opFor4("POST", "/v1/betaGroups/{id}/relationships/builds"),
+    pathParams: { id: g.id },
+    body: { data: [{ type: "builds", id: build.id }] },
+    deps
+  });
+  return {
+    group: g.name,
+    build: build.version,
+    note: g.isInternalGroup ? "Internal testers get the build right away." : "External groups need Apple's TestFlight beta review for a new build before testers can install it.",
+    ...preview
+  };
+}
+async function prepareBetaReview(deps, { appId: appId2, buildNumber }) {
+  const app = await resolveApp(deps, appId2);
+  const build = await findBuild(deps, app, buildNumber);
+  const problems = [];
+  if (build.processingState !== "VALID") problems.push(`Build ${build.version} is ${build.processingState}, not VALID yet.`);
+  if (build.expired) problems.push(`Build ${build.version} has expired.`);
+  if (build.usesNonExemptEncryption === null || build.usesNonExemptEncryption === void 0) {
+    problems.push("Export compliance is not answered for this build (usesNonExemptEncryption). Answer it in App Store Connect or set it in your build configuration.");
+  }
+  let existing = null;
+  try {
+    const sub = await deps.get(`/v1/builds/${enc4(build.id)}/betaAppReviewSubmission`);
+    existing = sub?.data ? { id: sub.data.id, state: sub.data.attributes?.betaReviewState } : null;
+  } catch {
+    existing = null;
+  }
+  if (existing) {
+    return {
+      allowed: false,
+      alreadySubmitted: true,
+      build: build.version,
+      betaReviewState: existing.state,
+      reason: `Build ${build.version} was already submitted for beta review (state: ${existing.state}).`
+    };
+  }
+  const notes = list(await deps.get(`/v1/builds/${enc4(build.id)}/betaBuildLocalizations${qs4({ limit: 50 })}`));
+  if (!notes.some((n) => (n.whatsNew || "").trim())) {
+    problems.push('No "What to Test" notes on this build. Add them with asc_testflight_set_notes.');
+  }
+  const appInfo = list(await deps.get(`/v1/apps/${enc4(app)}/betaAppLocalizations${qs4({ limit: 50 })}`));
+  if (!appInfo.some((l) => (l.description || "").trim() && (l.feedbackEmail || "").trim())) {
+    problems.push("The TestFlight app description and feedback email are not filled in (Test Information in App Store Connect).");
+  }
+  let detail = null;
+  try {
+    const d = await deps.get(`/v1/apps/${enc4(app)}/betaAppReviewDetail`);
+    detail = d?.data?.attributes || null;
+  } catch {
+    detail = null;
+  }
+  const missing = ["contactFirstName", "contactLastName", "contactPhone", "contactEmail"].filter((k) => !(detail?.[k] || "").trim());
+  if (missing.length) problems.push(`Beta App Review contact details are missing: ${missing.join(", ")}.`);
+  if (detail?.demoAccountRequired && !(detail.demoAccountName || "").trim()) {
+    problems.push("Beta App Review says a demo account is required, but no demo account name is set.");
+  }
+  if (problems.length) {
+    return { allowed: false, build: build.version, readyForBetaReview: false, problems, note: "Nothing was prepared. Fix these first, then ask again." };
+  }
+  const preview = await prepareChange({
+    op: opFor4("POST", "/v1/betaAppReviewSubmissions"),
+    body: { data: { type: "betaAppReviewSubmissions", relationships: { build: { data: { type: "builds", id: build.id } } } } },
+    deps
+  });
+  return {
+    build: build.version,
+    readyForBetaReview: true,
+    note: "Apple reviews the build (usually within a day). Once approved, external groups that have this build can install it. Add the build to a group with asc_testflight_add_build_to_group if you have not already.",
+    ...preview
+  };
+}
+async function prepareRemoveTester(deps, { appId: appId2, email: email3, group }) {
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email3 || "")) throw new Error("Pass the tester's email address.");
+  if (!group) throw new Error("Pass group (the TestFlight group name or id).");
+  const app = await resolveApp(deps, appId2);
+  const g = await findGroup(deps, app, group);
+  const members2 = list(await deps.get(`/v1/betaGroups/${enc4(g.id)}/betaTesters${qs4({ limit: 200 })}`));
+  const hit = members2.find((t) => String(t.email || "").toLowerCase() === email3.toLowerCase());
+  if (!hit) throw new Error(`${email3} is not in the TestFlight group "${g.name}".`);
+  const preview = await prepareChange({
+    op: opFor4("DELETE", "/v1/betaGroups/{id}/relationships/betaTesters"),
+    pathParams: { id: g.id },
+    body: { data: [{ type: "betaTesters", id: hit.id }] },
+    deps
+  });
+  return {
+    group: g.name,
+    tester: { email: hit.email, name: [hit.firstName, hit.lastName].filter(Boolean).join(" ") || void 0 },
+    note: "They lose access to this group's builds. Their other groups are not changed, and they can be added back later.",
+    ...preview
+  };
+}
+async function prepareExpireBuild(deps, { appId: appId2, buildNumber }) {
+  const app = await resolveApp(deps, appId2);
+  const build = await findBuild(deps, app, buildNumber);
+  if (build.expired) throw new Error(`Build ${build.version} has already expired.`);
+  const preview = await prepareChange({
+    op: opFor4("PATCH", "/v1/builds/{id}"),
+    pathParams: { id: build.id },
+    body: { data: { type: "builds", id: build.id, attributes: { expired: true } } },
+    deps
+  });
+  return {
+    build: build.version,
+    uploadedLocal: toLocalTime(build.uploadedDate),
+    warning: "Expiring cannot be undone: testers lose this build at once. It does not affect the App Store or a version already using it in review.",
+    ...preview
+  };
 }
 
 // index.js
@@ -38793,7 +39325,7 @@ function simplify(body) {
 var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(value, null, 2)) }] });
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
-var server = new McpServer({ name: "hypercaffium-apple", version: "0.10.0" });
+var server = new McpServer({ name: "hypercaffium-apple", version: "0.11.0" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();
@@ -38849,10 +39381,10 @@ readTool(
       }
       id = apps[0].id;
     }
-    const enc4 = encodeURIComponent(id);
+    const enc5 = encodeURIComponent(id);
     const [appBody, versionsBody, buildsBody] = await Promise.all([
-      ascGet(`/v1/apps/${enc4}`),
-      ascGet(`/v1/apps/${enc4}/appStoreVersions`, { limit: 20 }),
+      ascGet(`/v1/apps/${enc5}`),
+      ascGet(`/v1/apps/${enc5}/appStoreVersions`, { limit: 20 }),
       ascGet("/v1/builds", { "filter[app]": id, sort: "-uploadedDate", limit: 3 })
     ]);
     const versions = flattenList(versionsBody);
@@ -39197,9 +39729,25 @@ featureTool(
     version: versionArg,
     locale: external_exports.string().default("en-US"),
     displayType: external_exports.string().describe("Apple display type, e.g. APP_IPHONE_67, APP_IPAD_PRO_3GEN_129"),
-    files: external_exports.array(external_exports.string()).min(1).max(10).describe("Full paths to the image files, in the order they should appear")
+    files: external_exports.array(external_exports.string()).min(1).max(10).describe("Full paths to the image files, in the order they should appear"),
+    customProductPage: external_exports.string().optional().describe("Name or id of a custom product page to add them to instead of the version (its draft)")
   },
   (a) => prepareScreenshots(writeDeps, a)
+);
+featureTool(
+  "listing",
+  "asc_upload_app_previews",
+  "Prepare uploading app preview VIDEOS (.mov, .m4v, .mp4; up to 3 per set, 500 MB each) to a DRAFT version, or to a custom product page draft, for one locale and preview type (e.g. IPHONE_67). Adds only. Tier 1 on a draft version, Tier 2 on a custom page. Applying uploads the files and waits for Apple to process them.",
+  {
+    appId,
+    version: versionArg,
+    locale: external_exports.string().default("en-US"),
+    previewType: external_exports.string().describe("Apple preview type, e.g. IPHONE_67, IPAD_PRO_3GEN_129"),
+    files: external_exports.array(external_exports.string()).min(1).max(3).describe("Full paths to the video files, in display order"),
+    previewFrameTimeCode: external_exports.string().optional().describe("Poster frame, like 00:00:05"),
+    customProductPage: external_exports.string().optional().describe("Name or id of a custom product page (its draft) instead of the version")
+  },
+  (a) => prepareAppPreviews(writeDeps, a)
 );
 featureTool(
   "listing",
@@ -39283,6 +39831,122 @@ featureTool(
     amount: external_exports.number().optional().describe("Price per period (paid offers only; needs territory)")
   },
   (a) => prepareIntroOffer(writeDeps, a)
+);
+readTool(
+  "asc_offer_codes_overview",
+  "Offer codes of one subscription: each offer (what it gives, who can redeem it, active or not) and its code batches (one-time and custom codes). Read-only.",
+  { subscriptionId },
+  (a) => offerCodesOverview(writeDeps, a)
+);
+featureTool(
+  "pricing",
+  "asc_create_offer_code",
+  "Prepare an offer code offer on a subscription (for example 1 month free for new customers). Previews the offer and its per-territory prices. Creates the offer only; codes come from asc_generate_offer_codes. Tier 2.",
+  {
+    subscriptionId,
+    name: external_exports.string().describe("Only you see it"),
+    customerEligibilities: external_exports.array(external_exports.enum(["NEW", "EXISTING", "EXPIRED"])).default(["NEW"]),
+    offerEligibility: external_exports.enum(["STACK_WITH_INTRO_OFFERS", "REPLACE_INTRO_OFFERS"]).default("STACK_WITH_INTRO_OFFERS"),
+    numberOfPeriods: external_exports.number().int().min(1).default(1),
+    offerMode: external_exports.enum(OFFER_MODES).default("FREE_TRIAL"),
+    duration: external_exports.enum(DURATIONS).default("ONE_MONTH"),
+    territories: external_exports.union([external_exports.literal("all"), external_exports.array(external_exports.string())]).default("all").describe('"all" (where the subscription is sold) or territory codes like ["USA","CAN"]'),
+    amount: external_exports.number().optional().describe("Paid offers: the price in the USA, e.g. 0.99 (must be an Apple price point); other territories get Apple equalized prices")
+  },
+  (a) => prepareCreateOfferCode(writeDeps, a)
+);
+featureTool(
+  "pricing",
+  "asc_generate_offer_codes",
+  "Prepare generating redeemable codes for an offer code offer: a batch of one-time codes (numberOfCodes + expirationDate), or one custom code like BEEKEEPER redeemable numberOfCodes times. Tier 2.",
+  {
+    offerCodeId: external_exports.string().describe("Offer id from asc_offer_codes_overview"),
+    numberOfCodes: external_exports.number().int().min(1),
+    expirationDate: external_exports.string().optional().describe("YYYY-MM-DD (required for one-time codes)"),
+    customCode: external_exports.string().optional().describe("A custom code such as BEEKEEPER (letters and digits)")
+  },
+  (a) => prepareGenerateOfferCodes(writeDeps, a)
+);
+featureTool(
+  "pricing",
+  "asc_set_offer_code_active",
+  "Prepare switching an offer code offer on or off (off stops new redemptions). Tier 2.",
+  { offerCodeId: external_exports.string(), active: external_exports.boolean() },
+  (a) => prepareSetOfferCodeActive(writeDeps, a)
+);
+featureTool(
+  "pricing",
+  "asc_create_promotional_offer",
+  "Prepare a promotional offer on a subscription: a discount your app can offer to current or lapsed subscribers (it only reaches customers when your app requests it). Previews the per-territory prices. Tier 2.",
+  {
+    subscriptionId,
+    name: external_exports.string().describe("Only you see it"),
+    offerCode: external_exports.string().describe("The identifier your app uses to request this offer"),
+    numberOfPeriods: external_exports.number().int().min(1).default(1),
+    offerMode: external_exports.enum(OFFER_MODES).default("FREE_TRIAL"),
+    duration: external_exports.enum(DURATIONS).default("ONE_MONTH"),
+    territories: external_exports.union([external_exports.literal("all"), external_exports.array(external_exports.string())]).default("all").describe('"all" (where the subscription is sold) or territory codes like ["USA","CAN"]'),
+    amount: external_exports.number().optional().describe("Paid offers: the price in the USA, e.g. 0.99 (must be an Apple price point); other territories get Apple equalized prices")
+  },
+  (a) => prepareCreatePromotionalOffer(writeDeps, a)
+);
+featureTool(
+  "pricing",
+  "asc_create_win_back_offer",
+  "Prepare a win-back offer that Apple shows to people who used to subscribe (who qualifies, when it runs, and per-territory prices are all previewed). Tier 2.",
+  {
+    subscriptionId,
+    referenceName: external_exports.string().describe("Only you see it"),
+    offerId: external_exports.string().describe("Unique identifier, e.g. winback_2026_q4"),
+    periodCount: external_exports.number().int().min(1).default(1),
+    paidMonthsBefore: external_exports.number().int().min(1).default(1).describe("They must have paid for at least this many months"),
+    lapsedMinMonths: external_exports.number().int().min(1).default(1),
+    lapsedMaxMonths: external_exports.number().int().min(1).default(24),
+    waitBetweenOffersMonths: external_exports.number().int().min(1).optional(),
+    startDate: external_exports.string().describe("YYYY-MM-DD"),
+    endDate: external_exports.string().optional(),
+    priority: external_exports.enum(["HIGH", "NORMAL"]).default("NORMAL"),
+    promote: external_exports.boolean().default(false).describe("Let Apple promote it on the App Store"),
+    offerMode: external_exports.enum(OFFER_MODES).default("FREE_TRIAL"),
+    duration: external_exports.enum(DURATIONS).default("ONE_MONTH"),
+    territories: external_exports.union([external_exports.literal("all"), external_exports.array(external_exports.string())]).default("all").describe('"all" (where the subscription is sold) or territory codes like ["USA","CAN"]'),
+    amount: external_exports.number().optional().describe("Paid offers: the price in the USA, e.g. 0.99 (must be an Apple price point); other territories get Apple equalized prices")
+  },
+  (a) => prepareCreateWinBackOffer(writeDeps, a)
+);
+readTool(
+  "asc_custom_pages_overview",
+  "Custom product pages: alternate App Store pages (for example one per ad audience) with their state, link, deep link and promotional text. Read-only.",
+  { appId },
+  (a) => customPagesOverview(writeDeps, a)
+);
+featureTool(
+  "marketing",
+  "asc_create_custom_page",
+  "Prepare a new custom product page as a private draft: name, first locale and promotional text, optional deep link, and by default a copy of the live version's screenshots. Add or change screenshots with asc_upload_screenshots (customProductPage). Tier 2.",
+  {
+    appId,
+    name: external_exports.string().describe("Only you see it, 64 characters max"),
+    locale: external_exports.string().default("en-US"),
+    promotionalText: external_exports.string().optional().describe("170 characters max"),
+    deepLink: external_exports.string().optional().describe("Where in your app people land (optional)"),
+    copyFromLiveVersion: external_exports.boolean().default(true)
+  },
+  (a) => prepareCreateCustomPage(writeDeps, a)
+);
+featureTool(
+  "marketing",
+  "asc_edit_custom_page_text",
+  "Prepare changing (or adding a locale with) the promotional text of a custom product page draft. Tier 2.",
+  { appId, page: external_exports.string().describe("Page name or id"), locale: external_exports.string().default("en-US"), promotionalText: external_exports.string() },
+  (a) => prepareEditCustomPageText(writeDeps, a)
+);
+featureTool(
+  "marketing",
+  "asc_submit_custom_page",
+  "Prepare submitting a custom product page draft to App Review (a 3-step plan, one ticket). Refuses if another submission is already in review. Tier 2.",
+  { appId, page: external_exports.string().describe("Page name or id") },
+  (a) => prepareSubmitCustomPage(writeDeps, a)
 );
 readTool(
   "asc_review_inbox",
@@ -39373,6 +40037,20 @@ featureTool(
   "Prepare submitting a processed build to Apple's TestFlight beta review, which external testers need before they can install it. Checks first: build valid and not expired, export compliance answered, What to Test notes, TestFlight description and feedback email, beta review contact details, and that it was not already submitted. Returns the problems and NO ticket if anything is missing. Tier 2.",
   { appId, buildNumber: external_exports.string().describe("Build number, e.g. 57") },
   (a) => prepareBetaReview(writeDeps, a)
+);
+featureTool(
+  "testing",
+  "asc_testflight_remove_tester",
+  "Prepare taking one tester out of one TestFlight group (they lose that group's builds; their other groups are untouched and they can be added back). Tier 2.",
+  { appId, email: external_exports.string(), group: external_exports.string().describe("TestFlight group name or id") },
+  (a) => prepareRemoveTester(writeDeps, a)
+);
+featureTool(
+  "testing",
+  "asc_testflight_expire_build",
+  "Prepare expiring a TestFlight build so testers can no longer install it. Cannot be undone. Tier 2.",
+  { appId, buildNumber: external_exports.string().describe("Build number, e.g. 57") },
+  (a) => prepareExpireBuild(writeDeps, a)
 );
 readTool(
   "asc_prepare_plan",

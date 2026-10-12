@@ -14,7 +14,10 @@ Every change is **previewed, confirmed and logged**. Nothing happens without you
 | **Subscriptions** | `asc_subscription_overview`, `asc_subscription_prices`, `asc_find_price_point`, `asc_set_subscription_price`, `asc_edit_subscription`, `asc_edit_subscription_localization`, `asc_create_intro_offer` |
 | **Reviews** | `asc_review_inbox`, `asc_reply_to_review` |
 | **App Review & info** | `asc_edit_review_details`, `asc_edit_app_info` |
-| **TestFlight** | `asc_testflight_overview`, `asc_testflight_set_notes`, `asc_testflight_add_tester`, `asc_testflight_add_build_to_group`, `asc_testflight_submit_for_review` |
+| **TestFlight** | `asc_testflight_overview`, `asc_testflight_set_notes`, `asc_testflight_add_tester`, `asc_testflight_remove_tester`, `asc_testflight_add_build_to_group`, `asc_testflight_submit_for_review`, `asc_testflight_expire_build` |
+| **Media** | `asc_upload_screenshots`, `asc_upload_app_previews` (videos), `asc_clear_screenshots`; both uploads also work on custom product pages |
+| **Offers** | `asc_offer_codes_overview`, `asc_create_offer_code`, `asc_generate_offer_codes`, `asc_set_offer_code_active`, `asc_create_promotional_offer`, `asc_create_win_back_offer` |
+| **Custom product pages** | `asc_custom_pages_overview`, `asc_create_custom_page`, `asc_edit_custom_page_text`, `asc_submit_custom_page` |
 | **Everything else in Apple's API** | `asc_search_api`, `asc_describe_operation`, `asc_call` (reads), `asc_prepare_change` / `asc_prepare_plan` (writes) |
 | **Monitoring** | `asc_check_changes`, `asc_audit_log`, plus the commands `/hypercaffium-apple:release-status` and `/hypercaffium-apple:check-changes` (App Store, and Google Play too when hypercaffium-play is installed) |
 
@@ -26,7 +29,7 @@ It indexes Apple's full OpenAPI description (1,300+ operations), so anything the
 2. **Tiers, enforced by the server (not just by instructions):**
    - **Tier 1** can run without a prompt: low-risk edits to a version that is still a draft.
    - **Tier 2** needs your explicit approval: submissions, anything on a live version, public replies, anything that changes what customers pay.
-   - **Tier 3** is blocked: deletes (except draft screenshots), API keys, and any area switched off in your access settings.
+   - **Tier 3** is blocked: deletes (except draft screenshots and taking testers out of a TestFlight group), API keys, and any area switched off in your access settings.
 3. **Kill switch.** Writes are **off by default**. Turn them on with `"writesEnabled": true` in the config file; remove it to go read-only again.
 4. **Audit log.** Every change is recorded with its before and after values. Secrets and passwords are never logged.
 5. **Everything is validated** against Apple's request schemas before it is sent.

@@ -1,6 +1,6 @@
 {
   "name": "hypercaffium-play",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "description": "Manage Google Play from Claude: release status, tracks and staged rollouts, listing text and images, review replies and subscriptions. Every change is previewed, confirmed and audited.",
   "author": {
     "name": "Hypercaffium Labs"

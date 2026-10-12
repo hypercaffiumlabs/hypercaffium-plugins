@@ -158,7 +158,14 @@ export async function classify(op, filledPath, lookup, opts = {}) {
   return { ...verdict, feature: fv.feature };
 }
 
+// The second kind of delete that is allowed: taking testers OUT of a TestFlight group. It removes
+// nobody's account and nothing public, and they can simply be added back.
+const TESTER_REMOVE = /^\/v1\/betaGroups\/[^/]+\/relationships\/betaTesters$/;
+
 async function classifyTier(op, filledPath, lookup, opts) {
+  if (op.method === 'DELETE' && TESTER_REMOVE.test(filledPath)) {
+    return { tier: 2, reason: 'removes testers from a TestFlight group (they lose access to its builds; they can be added back)' };
+  }
   if (op.method === 'DELETE') {
     const m = SCREENSHOT_DELETE.exec(filledPath);
     if (m) return classifyScreenshotDelete(decodeURIComponent(m[1]), lookup, Boolean(opts.early));
@@ -188,6 +195,7 @@ async function classifyTier(op, filledPath, lookup, opts) {
 // A specific reason beats a generic one: say what is actually at stake.
 function tier2Reason(op, path) {
   if (path.startsWith('/v1/customerReviewResponses')) return 'a public reply, visible to everyone on the App Store';
+  if (/^\/v1\/builds\/[^/]+$/.test(path)) return 'this changes a build; expiring a build cannot be undone, and testers lose access to it at once';
   if (path.startsWith('/v1/betaTesters') || path.endsWith('/relationships/betaTesters')) return 'this adds a tester and Apple may email them an invitation';
   if (path.startsWith('/v1/reviewSubmissions') || path.startsWith('/v1/reviewSubmissionItems')) return 'this affects what is submitted to App Review';
   if (path.startsWith('/v1/appStoreVersionReleaseRequests') || path.includes('PhasedRelease')) return 'this releases or rolls out a version to real users';
