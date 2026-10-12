@@ -224,6 +224,8 @@ var COMMIT = new RegExp(`^${V3}applications/${PKG}/edits/${EDIT_ID}:commit$`);
 var UPLOAD_IMAGE = new RegExp(
   `^/upload${V3}applications/${PKG}/edits/${EDIT_ID}/listings/[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*/(icon|featureGraphic|phoneScreenshots|sevenInchScreenshots|tenInchScreenshots|tvBanner|tvScreenshots|wearScreenshots)$`
 );
+var UPLOAD_BUNDLE = new RegExp(`^/upload${V3}applications/${PKG}/edits/${EDIT_ID}/bundles$`);
+var UPLOAD_MAPPING = new RegExp(`^/upload${V3}applications/${PKG}/edits/${EDIT_ID}/apks/[0-9]+/deobfuscationFiles/(proguard|nativeCode)$`);
 var CONVERT_PRICES = new RegExp(`^${V3}applications/${PKG}/pricing:convertRegionPrices$`);
 var IMAGE_SET = new RegExp(
   `^${V3}applications/${PKG}/edits/${EDIT_ID}/listings/[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*/(icon|featureGraphic|phoneScreenshots|sevenInchScreenshots|tenInchScreenshots|tvBanner|tvScreenshots|wearScreenshots)$`

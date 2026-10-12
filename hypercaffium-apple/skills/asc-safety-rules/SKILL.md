@@ -1,7 +1,7 @@
 ---
 name: asc-safety-rules
 description: Use when working with App Store Connect, TestFlight, iOS build status, release notes, listing text, screenshots, submitting for App Review, phased release, subscriptions and prices, customer reviews, or App Review details. Explains the asc_ tools and the mandatory prepare-then-apply protocol for any change.
-version: 0.11.0
+version: 0.12.0
 ---
 
 # App Store Connect: how to use these tools safely
@@ -42,6 +42,7 @@ Every change tool below only **prepares**: it returns a preview (before and afte
 | TestFlight notes / testers / builds | `asc_testflight_set_notes` (Tier 1), `asc_testflight_add_tester` and `asc_testflight_add_build_to_group` (Tier 2) |
 | External TestFlight beta review | `asc_testflight_submit_for_review` (checks Apple's requirements first and lists what is missing, with NO ticket, if anything is; Tier 2) |
 | Remove a tester / expire a build | `asc_testflight_remove_tester` (one group only; they can be added back), `asc_testflight_expire_build` (cannot be undone: say so) |
+| Upload a build (.ipa) | `asc_upload_build` ("uploads" switch; most owners use EAS or Xcode instead, so ask before suggesting it) |
 | App preview videos | `asc_upload_app_previews` (draft version: Tier 1; custom page: Tier 2) |
 | Offer codes, promotional and win-back offers | `asc_create_offer_code` then `asc_generate_offer_codes`; `asc_set_offer_code_active`; `asc_create_promotional_offer`; `asc_create_win_back_offer`. All change what customers pay: show the per-territory price table and who qualifies, and get the exact terms from the owner |
 | Custom product pages | `asc_custom_pages_overview`, `asc_create_custom_page`, `asc_edit_custom_page_text`, screenshots via `asc_upload_screenshots` with `customProductPage`, then `asc_submit_custom_page` |

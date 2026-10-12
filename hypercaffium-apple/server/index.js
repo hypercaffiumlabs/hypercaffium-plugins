@@ -29,6 +29,7 @@ import {
   releaseOverview,
 } from './release.js';
 import { prepareAppPreviews, prepareClearScreenshots, prepareScreenshots, runScreenshots } from './screenshots.js';
+import { prepareUploadBuild, runBuildUpload } from './builds.js';
 import {
   customPagesOverview,
   DURATIONS,
@@ -116,6 +117,7 @@ const writeDeps = {
 };
 
 writeDeps.runScreenshots = (payload) => runScreenshots(payload, writeDeps);
+writeDeps.runBuildUpload = (payload) => runBuildUpload(payload, writeDeps);
 
 // Apple returns {id, type, attributes:{...}}; flatten to {id, type, ...attributes}.
 const flatten =(r) => ({ id: r.id, type: r.type, ...(r.attributes || {}) });
@@ -135,7 +137,7 @@ const ok = (value) => ({ content: [{ type: 'text', text: limitText(JSON.stringif
 const fail = (err) => ({ isError: true, content: [{ type: 'text', text: String(err.message || err) }] });
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 
-const server = new McpServer({ name: 'hypercaffium-apple', version: '0.11.0' });
+const server = new McpServer({ name: 'hypercaffium-apple', version: '0.12.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -586,6 +588,14 @@ featureTool('listing',
     customProductPage: z.string().optional().describe('Name or id of a custom product page to add them to instead of the version (its draft)'),
   },
   (a) => prepareScreenshots(writeDeps, a),
+);
+
+featureTool(
+  'uploads',
+  'asc_upload_build',
+  'Prepare uploading an iOS build (.ipa) from this computer to App Store Connect. Reads the version and build number from inside the file, checks the bundle ID matches the app and that Apple does not already have that build number. Applying uploads it and follows processing. Tier 2. Skip this if EAS, Xcode or fastlane uploads your builds.',
+  { appId, file: z.string().describe('Full path to the .ipa file') },
+  (a) => prepareUploadBuild(writeDeps, a),
 );
 
 featureTool(

@@ -209,6 +209,10 @@ export async function applyChange({ ticketId, requireTier1 = false, sensitiveToo
   const p = ticket.payload;
   checkApplyTool(p, { requireTier1, sensitiveTool });
   // Image uploads carry their own execution logic (a media upload inside one Play edit).
+  if (p.kind === 'bundle') {
+    deps.store.markUsed(ticketId);
+    return deps.runBundle(p);
+  }
   if (p.kind === 'images') {
     if (!currentFeatures().listing) throw new Error('The "listing" feature was switched off since the preview, so this upload is refused.');
     deps.store.markUsed(ticketId);

@@ -14,7 +14,7 @@ function pkgOf(deps, packageName) {
   return pkg;
 }
 
-async function readTrack(deps, pkg, track) {
+export async function readTrack(deps, pkg, track) {
   if (!TRACK.test(track || '')) throw new Error(`"${track}" is not a valid track name (internal, alpha, beta, production, or a custom track).`);
   try {
     const t = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP}/${pkg}/edits/${editId}/tracks/${track}`, {}));
@@ -24,7 +24,7 @@ async function readTrack(deps, pkg, track) {
   }
 }
 
-async function readVersionCodes(deps, pkg) {
+export async function readVersionCodes(deps, pkg) {
   const b = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP}/${pkg}/edits/${editId}/bundles`, {}));
   return (b.bundles || []).map((x) => Number(x.versionCode)).filter((n) => Number.isInteger(n));
 }

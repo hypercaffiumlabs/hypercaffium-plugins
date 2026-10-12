@@ -14,6 +14,7 @@ Every change is **previewed, confirmed and logged**.
 | **Releases** | `play_set_release`, `play_rollout`, `play_promote_release`, `play_set_release_notes` |
 | **Listing** | `play_edit_listing`, `play_upload_images`, `play_replace_images` |
 | **Reviews** | `play_list_reviews`, `play_reply_to_review` |
+| **App bundles** | `play_upload_bundle` (an .aab, optionally with mapping.txt, onto a track; production uploads are always a draft). Only if you do not use EAS or Gradle uploads |
 | **Testers** | `play_list_testers`, `play_set_testers` (Google Groups on testing tracks) |
 | **Subscriptions** | `play_subscription_overview`, `play_set_subscription_price`, `play_migrate_subscription_prices` |
 | **Everything else in Google's API** | `play_search_api`, `play_describe_method`, `play_call` (reads), `play_prepare_change` (writes) |
@@ -138,7 +139,7 @@ Pause: `Disable-ScheduledTask -TaskName "Hypercaffium Play Watch"`. Remove: `Unr
 
 ## Builds
 
-This plugin does not upload app bundles. Use your own pipeline (EAS, Gradle, fastlane). It checks that a version code exists before putting it on a track.
+Most people upload with their own pipeline (EAS, Gradle, fastlane); the plugin then puts version codes on tracks. If you build locally, `play_upload_bundle` uploads the .aab itself (the "uploads" switch), with its mapping.txt so crash reports are readable, and places it on a track in the same all-or-nothing edit. Production uploads are always a draft release.
 
 ## Development
 

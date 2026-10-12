@@ -60,7 +60,7 @@ const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'play-img-'));
 
 // ---------- guard: the single upload endpoint ----------
 
-test('guard allows exactly the listing-image upload endpoint and nothing near it', () => {
+test('guard allows exactly the listing-image upload endpoint and nothing near it (with app-file uploads switched off)', () => {
   const ok = `/upload${BASE}/edits/E1/listings/en-US/phoneScreenshots`;
   assertWriteAllowed('POST', ok);
   assertWriteAllowed('POST', `/upload${BASE}/edits/E1/listings/en-US/featureGraphic`);
@@ -73,7 +73,7 @@ test('guard allows exactly the listing-image upload endpoint and nothing near it
     ['POST', `/upload${BASE}/edits/E1/listings/en-US/../icon`],
     ['POST', '/upload/androidpublisher/v3/developers/1/users'],
   ];
-  for (const [m, p] of bad) assert.throws(() => assertWriteAllowed(m, p), /Blocked/, `${m} ${p}`);
+  for (const [m, p] of bad) assert.throws(() => assertWriteAllowed(m, p, { uploads: false }), /Blocked/, `${m} ${p}`);
 });
 
 // ---------- review replies + listing text ----------

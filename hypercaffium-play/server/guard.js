@@ -31,6 +31,10 @@ const UPLOAD_IMAGE = new RegExp(
 // depend only on the method-id rules in rules.js.
 const PURCHASE_ACTIONS = /(:(refund|revoke|cancel|defer|consume|acknowledge))|\/(orders|purchases|externalTransactions|voidedpurchases)(\/|:|$)/i;
 
+// App bundle and mapping-file uploads into an open edit (only with the "uploads" feature on).
+const UPLOAD_BUNDLE = new RegExp(`^/upload${V3}applications/${PKG}/edits/${EDIT_ID}/bundles$`);
+const UPLOAD_MAPPING = new RegExp(`^/upload${V3}applications/${PKG}/edits/${EDIT_ID}/apks/[0-9]+/deobfuscationFiles/(proguard|nativeCode)$`);
+
 // Google's price converter: a POST that only calculates (it changes nothing), used by price previews.
 const CONVERT_PRICES = new RegExp(`^${V3}applications/${PKG}/pricing:convertRegionPrices$`);
 
@@ -60,6 +64,10 @@ export function assertWriteAllowed(method, pathname, features = currentFeatures(
   }
   let allowed = false;
   if (method === 'POST' && (CREATE_EDIT.test(pathname) || COMMIT.test(pathname) || UPLOAD_IMAGE.test(pathname))) allowed = true;
+  else if (method === 'POST' && (UPLOAD_BUNDLE.test(pathname) || UPLOAD_MAPPING.test(pathname))) {
+    if (!features.uploads) throw new Error(`Blocked by safety guard: ${method} ${pathname} uploads an app file (the "uploads" feature is off).`);
+    allowed = true;
+  }
   else if (['POST', 'PUT', 'PATCH'].includes(method)) {
     allowed =
       (APP_PATH.test(pathname) && !/\/users(\/|$)|\/grants(\/|$)/.test(pathname)) || (Boolean(features.users) && DEV_USERS.test(pathname));

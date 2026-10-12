@@ -25,6 +25,7 @@ import { prepareReplaceImages, prepareUploadImages, runImages } from './images.j
 import { subscriptionOverview } from './subscriptions.js';
 import { prepareMigratePrices, prepareSetSubscriptionPrice } from './pricing.js';
 import { listTesters, prepareSetTesters } from './testers.js';
+import { prepareUploadBundle, runBundle } from './bundles.js';
 import { prepareReleaseNotes, preparePromote, prepareRollout, prepareSetRelease } from './release.js';
 
 const PLUGIN = 'google-play-console';
@@ -104,6 +105,28 @@ async function playUpload({ pkg, editId, language, imageType, bytes, mime }) {
 writeDeps.upload = playUpload;
 writeDeps.runImages = (payload) => runImages(payload, writeDeps);
 
+// App bundle and mapping uploads (Google's media-upload endpoint), only after a valid ticket.
+async function playUploadBinary(pathname, bytes) {
+  assertWriteAllowed('POST', pathname);
+  const url = new URL(pathname, API_ORIGIN);
+  url.searchParams.set('uploadType', 'media');
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await getAccessToken()}`, 'Content-Type': 'application/octet-stream', Accept: 'application/json' },
+    body: bytes,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const e = json.error || {};
+    throw new Error(`Google Play upload failed (${res.status}): ${e.message || e.status || 'unknown error'}`);
+  }
+  return json;
+}
+writeDeps.uploadBundle = ({ pkg, editId, bytes }) => playUploadBinary(`/upload${APP_BASE}/${pkg}/edits/${editId}/bundles`, bytes);
+writeDeps.uploadMapping = ({ pkg, editId, versionCode, bytes }) =>
+  playUploadBinary(`/upload${APP_BASE}/${pkg}/edits/${editId}/apks/${versionCode}/deobfuscationFiles/proguard`, bytes);
+writeDeps.runBundle = (payload) => runBundle(payload, writeDeps);
+
 function resolvePackage(arg) {
   const pkg = arg || loadConfig().defaultPackageName;
   if (!pkg) {
@@ -121,7 +144,7 @@ const packageName = z
   .optional()
   .describe('Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.');
 
-const server = new McpServer({ name: 'hypercaffium-play', version: '0.11.0' });
+const server = new McpServer({ name: 'hypercaffium-play', version: '0.12.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -506,6 +529,24 @@ featureTool('releases',
   'Prepare changing the release notes of a draft, in-progress or halted release on a track (Google does not allow changing a completed release). Shows old and new text per language. Tier 2.',
   { packageName, track: z.string().default('production'), releaseNotes: notesSchema },
   (a) => prepareReleaseNotes(writeDeps, a),
+);
+
+// ---- uploading app files -----------------------------------------------------------
+
+featureTool(
+  'uploads',
+  'play_upload_bundle',
+  'Prepare uploading an Android App Bundle (.aab) from this computer, optionally with its R8/ProGuard mapping.txt so crash reports are readable, and putting it on a track (default internal). Production uploads are always a DRAFT release. Upload, mapping and track change are committed together in one Play edit, or not at all. Tier 2. Skip this if EAS or Gradle uploads your builds.',
+  {
+    packageName,
+    file: z.string().describe('Full path to the .aab file'),
+    mappingFile: z.string().optional().describe('Full path to mapping.txt from the same build (optional)'),
+    track: z.string().default('internal').describe('internal, alpha, beta, production, or a closed track'),
+    status: z.enum(['draft', 'completed', 'inProgress']).optional().describe('Testing tracks default to completed; production is always draft'),
+    userFraction: z.number().optional().describe('For inProgress: rollout fraction, e.g. 0.1'),
+    releaseNotes: notesSchema.optional(),
+  },
+  (a) => prepareUploadBundle(writeDeps, a),
 );
 
 // ---- testers ------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 {
   "name": "hypercaffium-apple",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Run an App Store release from Claude: release overview with pre-flight, release notes, builds, submit, phased release, screenshots, reviews, TestFlight, subscriptions and prices. Every change is previewed, confirmed and audited.",
   "author": {
     "name": "Hypercaffium Labs"

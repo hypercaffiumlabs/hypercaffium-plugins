@@ -1,7 +1,7 @@
 ---
 name: play-safety-rules
 description: Use when working with Google Play Console, the Play Store, Android release tracks, staged rollouts, app bundles, store listing text and images, review replies, or subscriptions. Explains the play_ tools and the mandatory prepare-then-apply protocol for any change.
-version: 0.11.0
+version: 0.12.0
 ---
 
 # Google Play Console: how to use these tools safely
@@ -47,6 +47,10 @@ The tools check the version code was really uploaded (builds arrive from your ow
 | Edit title / short / full description | `play_edit_listing` | Manage store presence |
 | Upload icon, feature graphic, screenshots | `play_upload_images` (adds only; all-or-nothing commit) | Manage store presence |
 | Replace a whole image set (e.g. all phone screenshots) | `play_replace_images` (removes the old set and uploads the new one in ONE edit; the preview lists every removed image with a link to save it) | Manage store presence |
+
+### App bundles
+
+`play_upload_bundle` uploads an .aab (and optionally mapping.txt) and places it on a track in ONE edit; production uploads are always a draft. Only with the "uploads" switch on; most owners upload with EAS or Gradle, so ask before suggesting it.
 
 ### Testers
 
