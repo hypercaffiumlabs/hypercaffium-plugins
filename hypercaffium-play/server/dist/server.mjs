@@ -38065,6 +38065,13 @@ function inspect(p, { ext, max, zip }) {
   if (zip && buf.readUInt32LE(0) !== 67324752) throw new Error(`${path7.basename(p)} is not a valid app bundle (it is not a zip archive).`);
   return { path: p, name: path7.basename(p), size: st.size, sha256: crypto4.createHash("sha256").update(buf).digest("hex") };
 }
+function planTrack(releases, status) {
+  const keep = releases.filter((r) => r.status === "completed" && status !== "completed");
+  const replaced = releases.filter((r) => !keep.includes(r));
+  return { keep, replaced };
+}
+var fingerprint = (releases) => JSON.stringify((releases || []).map((r) => [r.status, (r.versionCodes || []).map(String).sort(), r.userFraction ?? null]));
+var describe4 = (r) => ({ status: r.status, versionCodes: (r.versionCodes || []).map(Number), name: r.name });
 var off = (keys) => {
   const f = currentFeatures();
   const missing = keys.filter((k) => !f[k]);
@@ -38074,7 +38081,7 @@ async function prepareUploadBundle(deps, { packageName: packageName2, file: file
   const blocked = off(["uploads", "releases"]);
   if (blocked) return blocked;
   const pkg = packageName2 || deps.defaultPackage();
-  const isProd = track === "production";
+  const isProd = String(track).toLowerCase() === "production";
   const finalStatus = isProd ? "draft" : status || "completed";
   if (isProd && status && status !== "draft") {
     throw new Error("Uploads to production are always a DRAFT release. Look at it, then make it live with play_set_release or play_rollout.");
@@ -38085,10 +38092,17 @@ async function prepareUploadBundle(deps, { packageName: packageName2, file: file
   const bundle = inspect(file2, { ext: ".aab", max: MAX_BUNDLE, zip: true });
   const mapping = mappingFile ? inspect(mappingFile, { ext: ".txt", max: MAX_MAPPING }) : null;
   const current = await readTrack(deps, pkg, track);
+  const { keep, replaced } = planTrack(current.releases, finalStatus);
+  const live = replaced.filter((r) => r.status === "inProgress" || r.status === "halted");
+  if (live.length) {
+    throw new Error(
+      `The ${track} track has a ${live.map((r) => `${r.status} release (version code ${(r.versionCodes || []).join(", ")})`).join(" and ")}. Uploading here would replace it and end that rollout. Finish or change it first with play_rollout or play_set_release, then upload.`
+    );
+  }
   const codes = await readVersionCodes(deps, pkg);
   const highest = codes.length ? Math.max(...codes) : 0;
   const title = `Upload ${bundle.name} to the ${track} track as a ${finalStatus} release`;
-  const payload = { kind: "bundle", tier: 2, title, pkg, track, status: finalStatus, userFraction, notes, bundle, mapping };
+  const payload = { kind: "bundle", tier: 2, title, pkg, track, status: finalStatus, userFraction, notes, bundle, mapping, trackFingerprint: fingerprint(current.releases) };
   const ticket = deps.store.create(payload);
   return {
     allowed: true,
@@ -38102,7 +38116,9 @@ async function prepareUploadBundle(deps, { packageName: packageName2, file: file
     file: { name: bundle.name, sizeMB: Math.round(bundle.size / 1048576 * 10) / 10, sha256: bundle.sha256 },
     mappingFile: mapping ? { name: mapping.name, sizeMB: Math.round(mapping.size / 1048576 * 10) / 10 } : "none (crash reports for this version will not be decoded)",
     versionCodeRule: `Its version code must be higher than every one already uploaded (highest now: ${highest || "none"}). Google reads it from the file and refuses the upload otherwise.`,
-    currentlyOnTrack: current.releases.map((r) => ({ status: r.status, versionCodes: r.versionCodes, name: r.name })),
+    currentlyOnTrack: current.releases.map(describe4),
+    keepsServing: keep.map(describe4),
+    replaces: replaced.length ? replaced.map(describe4) : "nothing",
     committedTogether: "Upload, mapping file and track change happen inside ONE Play edit and are committed together, or not at all.",
     nextStep: "Show this to the owner and wait for an explicit yes, then apply with play_apply_change. Large files can take a few minutes."
   };
@@ -38111,6 +38127,7 @@ async function runBundle(payload, deps) {
   const missing = ["uploads", "releases"].filter((k) => !currentFeatures()[k]);
   if (missing.length) throw new Error(`The "${missing.join('", "')}" feature was switched off since the preview, so this upload is refused.`);
   const { pkg, track, status, userFraction, notes, bundle, mapping } = payload;
+  if (String(track).toLowerCase() === "production" && status !== "draft") throw new Error("Production uploads must be a draft release.");
   const steps = [];
   let edit;
   try {
@@ -38133,10 +38150,13 @@ async function runBundle(payload, deps) {
       steps.push(`attached ${mapping.name}`);
     }
     const cur = await deps.get(`${APP6}/${pkg}/edits/${edit.id}/tracks/${track}`, {});
+    if (payload.trackFingerprint !== void 0 && fingerprint(cur.releases) !== payload.trackFingerprint) {
+      throw new Error(`The ${track} track changed since the preview. Nothing was committed; prepare the upload again.`);
+    }
     const release = { status, versionCodes: [String(versionCode)] };
     if (status === "inProgress") release.userFraction = userFraction;
     if (notes) release.releaseNotes = notes;
-    const keep = (cur.releases || []).filter((r) => r.status === "completed" && status !== "completed");
+    const { keep } = planTrack(cur.releases || [], status);
     await deps.send("PUT", `${APP6}/${pkg}/edits/${edit.id}/tracks/${track}`, {}, { track, releases: [release, ...keep] });
     steps.push(`set a ${status} release on ${track}`);
     const commit = await deps.send("POST", `${APP6}/${pkg}/edits/${edit.id}:commit`, {}, void 0);
@@ -38248,7 +38268,7 @@ var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 var packageName = external_exports.string().optional().describe("Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.");
-var server = new McpServer({ name: "hypercaffium-play", version: "0.12.0" });
+var server = new McpServer({ name: "hypercaffium-play", version: "0.12.1" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();

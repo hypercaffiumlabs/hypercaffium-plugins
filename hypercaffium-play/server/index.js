@@ -144,7 +144,7 @@ const packageName = z
   .optional()
   .describe('Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.');
 
-const server = new McpServer({ name: 'hypercaffium-play', version: '0.12.0' });
+const server = new McpServer({ name: 'hypercaffium-play', version: '0.12.1' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {

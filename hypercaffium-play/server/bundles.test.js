@@ -135,3 +135,58 @@ test('the guard only lets bundle and mapping uploads through when uploads are on
   assert.throws(() => assertWriteAllowed('POST', up, { uploads: false }), /uploads/);
   assert.throws(() => assertWriteAllowed('POST', `/upload${BASE}/edits/E1/apks`, { uploads: true }), /not an allowed change/);
 });
+
+// ---- regressions from the security review of 0.12.0 ----
+
+function fakeWithTrack(releasesAtPrepare, releasesAtApply = releasesAtPrepare) {
+  const d = fake();
+  let applying = false;
+  const origSend = d.send;
+  d.send = async (method, p, q, body) => {
+    if (method === 'POST' && p.endsWith('/edits')) applying = true;
+    return origSend(method, p, q, body);
+  };
+  const origGet = d.get;
+  d.get = async (p, q) => (p.includes('/tracks/') ? { releases: applying ? releasesAtApply : releasesAtPrepare } : origGet(p, q));
+  return d;
+}
+
+test('review fix: a differently capitalized "Production" is still forced to draft', async () => {
+  const dir = tmp();
+  await assert.rejects(prepareUploadBundle(fake(), { file: aab(dir), track: 'Production', status: 'completed' }), /always a DRAFT/);
+  const p = await prepareUploadBundle(fake(), { file: aab(dir), track: 'PRODUCTION' });
+  assert.match(p.title, /draft release/);
+});
+
+test('review fix: uploading over a staged or halted rollout is refused, never silently ended', async () => {
+  const dir = tmp();
+  for (const status of ['inProgress', 'halted']) {
+    const d = fakeWithTrack([
+      { status, versionCodes: ['7'], userFraction: 0.2 },
+      { status: 'completed', versionCodes: ['6'] },
+    ]);
+    await assert.rejects(prepareUploadBundle(d, { file: aab(dir), track: 'production' }), /end that rollout/, status);
+  }
+});
+
+test('review fix: the preview lists what the upload replaces', async () => {
+  const dir = tmp();
+  const d = fakeWithTrack([{ status: 'draft', versionCodes: ['7'] }, { status: 'completed', versionCodes: ['6'] }]);
+  const p = await prepareUploadBundle(d, { file: aab(dir), track: 'production' });
+  assert.deepEqual(p.replaces, [{ status: 'draft', versionCodes: [7], name: undefined }]);
+  assert.deepEqual(p.keepsServing, [{ status: 'completed', versionCodes: [6], name: undefined }]);
+});
+
+test('review fix: if the track changed after the preview, nothing is committed', async () => {
+  const dir = tmp();
+  const d = fakeWithTrack(
+    [{ status: 'completed', versionCodes: ['6'] }],
+    [{ status: 'inProgress', versionCodes: ['8'], userFraction: 0.1 }, { status: 'completed', versionCodes: ['6'] }],
+  );
+  const p = await prepareUploadBundle(d, { file: aab(dir), track: 'production' });
+  const out = await applyChange({ ticketId: p.ticket, deps: d });
+  assert.equal(out.committed, false);
+  assert.match(out.error, /changed since the preview/);
+  assert.ok(!d.calls.some((c) => c[0] === 'PUT'), 'the track was never written');
+  assert.ok(d.calls.some((c) => c[0] === 'DELETE' && c[1] === '/edits/E1'), 'the edit (and the uploaded bundle) was discarded');
+});
