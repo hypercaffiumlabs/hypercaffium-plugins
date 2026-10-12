@@ -339,3 +339,70 @@ export async function prepareAddBuildToGroup(deps, { appId, buildNumber, group }
     ...preview,
   };
 }
+
+// External TestFlight testers can only install a build after Apple's beta review. This checks what
+// Apple requires first (and returns the problems with NO ticket if anything is missing), then
+// prepares the submission.
+export async function prepareBetaReview(deps, { appId, buildNumber }) {
+  const app = await resolveApp(deps, appId);
+  const build = await findBuild(deps, app, buildNumber);
+  const problems = [];
+  if (build.processingState !== 'VALID') problems.push(`Build ${build.version} is ${build.processingState}, not VALID yet.`);
+  if (build.expired) problems.push(`Build ${build.version} has expired.`);
+  if (build.usesNonExemptEncryption === null || build.usesNonExemptEncryption === undefined) {
+    problems.push('Export compliance is not answered for this build (usesNonExemptEncryption). Answer it in App Store Connect or set it in your build configuration.');
+  }
+
+  let existing = null;
+  try {
+    const sub = await deps.get(`/v1/builds/${enc(build.id)}/betaAppReviewSubmission`);
+    existing = sub?.data ? { id: sub.data.id, state: sub.data.attributes?.betaReviewState } : null;
+  } catch {
+    existing = null; // no submission yet
+  }
+  if (existing) {
+    return {
+      allowed: false,
+      alreadySubmitted: true,
+      build: build.version,
+      betaReviewState: existing.state,
+      reason: `Build ${build.version} was already submitted for beta review (state: ${existing.state}).`,
+    };
+  }
+
+  const notes = list(await deps.get(`/v1/builds/${enc(build.id)}/betaBuildLocalizations${qs({ limit: 50 })}`));
+  if (!notes.some((n) => (n.whatsNew || '').trim())) {
+    problems.push('No "What to Test" notes on this build. Add them with asc_testflight_set_notes.');
+  }
+  const appInfo = list(await deps.get(`/v1/apps/${enc(app)}/betaAppLocalizations${qs({ limit: 50 })}`));
+  if (!appInfo.some((l) => (l.description || '').trim() && (l.feedbackEmail || '').trim())) {
+    problems.push('The TestFlight app description and feedback email are not filled in (Test Information in App Store Connect).');
+  }
+  let detail = null;
+  try {
+    const d = await deps.get(`/v1/apps/${enc(app)}/betaAppReviewDetail`);
+    detail = d?.data?.attributes || null;
+  } catch {
+    detail = null;
+  }
+  const missing = ['contactFirstName', 'contactLastName', 'contactPhone', 'contactEmail'].filter((k) => !(detail?.[k] || '').trim());
+  if (missing.length) problems.push(`Beta App Review contact details are missing: ${missing.join(', ')}.`);
+  if (detail?.demoAccountRequired && !(detail.demoAccountName || '').trim()) {
+    problems.push('Beta App Review says a demo account is required, but no demo account name is set.');
+  }
+
+  if (problems.length) {
+    return { allowed: false, build: build.version, readyForBetaReview: false, problems, note: 'Nothing was prepared. Fix these first, then ask again.' };
+  }
+  const preview = await prepareChange({
+    op: opFor('POST', '/v1/betaAppReviewSubmissions'),
+    body: { data: { type: 'betaAppReviewSubmissions', relationships: { build: { data: { type: 'builds', id: build.id } } } } },
+    deps,
+  });
+  return {
+    build: build.version,
+    readyForBetaReview: true,
+    note: 'Apple reviews the build (usually within a day). Once approved, external groups that have this build can install it. Add the build to a group with asc_testflight_add_build_to_group if you have not already.',
+    ...preview,
+  };
+}

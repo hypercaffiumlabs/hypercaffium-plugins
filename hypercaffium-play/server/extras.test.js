@@ -150,7 +150,7 @@ test('image upload: previews, refuses a full set, then uploads in order inside o
   ]);
 
   const full = fakePlay({ '/listings/en-US/phoneScreenshots': { images: Array.from({ length: 8 }, (_, i) => ({ id: `i${i}` })) } });
-  await assert.rejects(() => prepareUploadImages(full, { imageType: 'phoneScreenshots', files: [a] }), /would exceed 8.*delete/s);
+  await assert.rejects(() => prepareUploadImages(full, { imageType: 'phoneScreenshots', files: [a] }), /would exceed 8.*play_replace_images/s);
   const icon = fakePlay({ '/listings/en-US/icon': { images: [{ id: 'old' }] } });
   const ip = await prepareUploadImages(icon, { imageType: 'icon', files: [png(dir, 'icon.png', 512, 512)] });
   assert.equal(ip.replacesExisting, true);

@@ -14,7 +14,7 @@ Every change is **previewed, confirmed and logged**. Nothing happens without you
 | **Subscriptions** | `asc_subscription_overview`, `asc_subscription_prices`, `asc_find_price_point`, `asc_set_subscription_price`, `asc_edit_subscription`, `asc_edit_subscription_localization`, `asc_create_intro_offer` |
 | **Reviews** | `asc_review_inbox`, `asc_reply_to_review` |
 | **App Review & info** | `asc_edit_review_details`, `asc_edit_app_info` |
-| **TestFlight** | `asc_testflight_overview`, `asc_testflight_set_notes`, `asc_testflight_add_tester`, `asc_testflight_add_build_to_group` |
+| **TestFlight** | `asc_testflight_overview`, `asc_testflight_set_notes`, `asc_testflight_add_tester`, `asc_testflight_add_build_to_group`, `asc_testflight_submit_for_review` |
 | **Everything else in Apple's API** | `asc_search_api`, `asc_describe_operation`, `asc_call` (reads), `asc_prepare_change` / `asc_prepare_plan` (writes) |
 | **Monitoring** | `asc_check_changes`, `asc_audit_log` |
 

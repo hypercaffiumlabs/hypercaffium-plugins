@@ -224,6 +224,10 @@ var COMMIT = new RegExp(`^${V3}applications/${PKG}/edits/${EDIT_ID}:commit$`);
 var UPLOAD_IMAGE = new RegExp(
   `^/upload${V3}applications/${PKG}/edits/${EDIT_ID}/listings/[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*/(icon|featureGraphic|phoneScreenshots|sevenInchScreenshots|tenInchScreenshots|tvBanner|tvScreenshots|wearScreenshots)$`
 );
+var CONVERT_PRICES = new RegExp(`^${V3}applications/${PKG}/pricing:convertRegionPrices$`);
+var IMAGE_SET = new RegExp(
+  `^${V3}applications/${PKG}/edits/${EDIT_ID}/listings/[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*/(icon|featureGraphic|phoneScreenshots|sevenInchScreenshots|tenInchScreenshots|tvBanner|tvScreenshots|wearScreenshots)$`
+);
 var DEV_USERS = new RegExp(`^${V3}developers/[0-9]+/users(/[^/]+(/grants(/[^/]+)?)?)?$`);
 function assertAllowed(method, pathname) {
   if (pathname.split("/").some((seg) => seg === "." || seg === ".." || seg.toLowerCase() === "%2e" || seg.toLowerCase() === "%2e%2e")) {
@@ -231,7 +235,7 @@ function assertAllowed(method, pathname) {
   }
   let allowed = false;
   if (method === "GET") allowed = SAFE_PATH.test(pathname) && !ACTION_SUFFIX.test(pathname);
-  else if (method === "POST") allowed = CREATE_EDIT.test(pathname);
+  else if (method === "POST") allowed = CREATE_EDIT.test(pathname) || CONVERT_PRICES.test(pathname);
   else if (method === "DELETE") allowed = DELETE_EDIT.test(pathname);
   if (!allowed) {
     throw new Error(`Blocked by safety guard: ${method} ${pathname} is not a read-only request.`);
@@ -241,7 +245,7 @@ function assertAllowed(method, pathname) {
 // client.js
 var API_ORIGIN = "https://androidpublisher.googleapis.com";
 var APP_BASE = "/androidpublisher/v3/applications";
-async function playRequest(method, pathname, query = {}) {
+async function playRequest(method, pathname, query = {}, body) {
   assertAllowed(method, pathname);
   const url = new URL(pathname, API_ORIGIN);
   for (const [k, v] of Object.entries(query)) {
@@ -251,16 +255,16 @@ async function playRequest(method, pathname, query = {}) {
   const init = { method, headers };
   if (method === "POST") {
     headers["Content-Type"] = "application/json";
-    init.body = "{}";
+    init.body = body ? JSON.stringify(body) : "{}";
   }
   const res = await fetch(url, init);
   if (method === "DELETE" && res.status === 204) return {};
-  const body = await res.json().catch(() => ({}));
+  const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const e = body.error || {};
+    const e = json.error || {};
     throw new Error(`Google Play API ${res.status} for ${url.pathname}: ${e.message || e.status || "unknown error"}`);
   }
-  return body;
+  return json;
 }
 
 // monitor.js

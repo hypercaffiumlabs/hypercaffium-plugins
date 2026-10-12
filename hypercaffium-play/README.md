@@ -12,9 +12,9 @@ Every change is **previewed, confirmed and logged**.
 |---|---|
 | **Status** | `play_release_status`, `play_list_tracks`, `play_list_bundles`, `play_check_changes` |
 | **Releases** | `play_set_release`, `play_rollout`, `play_promote_release`, `play_set_release_notes` |
-| **Listing** | `play_edit_listing`, `play_upload_images` |
+| **Listing** | `play_edit_listing`, `play_upload_images`, `play_replace_images` |
 | **Reviews** | `play_list_reviews`, `play_reply_to_review` |
-| **Subscriptions** | `play_subscription_overview` |
+| **Subscriptions** | `play_subscription_overview`, `play_set_subscription_price`, `play_migrate_subscription_prices` |
 | **Everything else in Google's API** | `play_search_api`, `play_describe_method`, `play_call` (reads), `play_prepare_change` (writes) |
 | **Audit** | `play_audit_log` |
 

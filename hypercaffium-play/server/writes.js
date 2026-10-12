@@ -158,6 +158,7 @@ export async function prepareChange({ changes, deps }) {
     tier: worst,
     tierReason: (verdicts.find((v) => v.sensitive) || verdicts.find((v) => v.tier === worst)).reason,
     sensitive: sensitive || undefined,
+    feature: [...new Set(verdicts.map((v) => v.feature))].join(', '),
     ticket: ticket.id,
     expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
     app: pkg,

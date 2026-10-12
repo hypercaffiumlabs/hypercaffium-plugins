@@ -38438,6 +38438,66 @@ async function prepareAddBuildToGroup(deps, { appId: appId2, buildNumber, group 
     ...preview
   };
 }
+async function prepareBetaReview(deps, { appId: appId2, buildNumber }) {
+  const app = await resolveApp(deps, appId2);
+  const build = await findBuild(deps, app, buildNumber);
+  const problems = [];
+  if (build.processingState !== "VALID") problems.push(`Build ${build.version} is ${build.processingState}, not VALID yet.`);
+  if (build.expired) problems.push(`Build ${build.version} has expired.`);
+  if (build.usesNonExemptEncryption === null || build.usesNonExemptEncryption === void 0) {
+    problems.push("Export compliance is not answered for this build (usesNonExemptEncryption). Answer it in App Store Connect or set it in your build configuration.");
+  }
+  let existing = null;
+  try {
+    const sub = await deps.get(`/v1/builds/${enc2(build.id)}/betaAppReviewSubmission`);
+    existing = sub?.data ? { id: sub.data.id, state: sub.data.attributes?.betaReviewState } : null;
+  } catch {
+    existing = null;
+  }
+  if (existing) {
+    return {
+      allowed: false,
+      alreadySubmitted: true,
+      build: build.version,
+      betaReviewState: existing.state,
+      reason: `Build ${build.version} was already submitted for beta review (state: ${existing.state}).`
+    };
+  }
+  const notes = list(await deps.get(`/v1/builds/${enc2(build.id)}/betaBuildLocalizations${qs2({ limit: 50 })}`));
+  if (!notes.some((n) => (n.whatsNew || "").trim())) {
+    problems.push('No "What to Test" notes on this build. Add them with asc_testflight_set_notes.');
+  }
+  const appInfo = list(await deps.get(`/v1/apps/${enc2(app)}/betaAppLocalizations${qs2({ limit: 50 })}`));
+  if (!appInfo.some((l) => (l.description || "").trim() && (l.feedbackEmail || "").trim())) {
+    problems.push("The TestFlight app description and feedback email are not filled in (Test Information in App Store Connect).");
+  }
+  let detail = null;
+  try {
+    const d = await deps.get(`/v1/apps/${enc2(app)}/betaAppReviewDetail`);
+    detail = d?.data?.attributes || null;
+  } catch {
+    detail = null;
+  }
+  const missing = ["contactFirstName", "contactLastName", "contactPhone", "contactEmail"].filter((k) => !(detail?.[k] || "").trim());
+  if (missing.length) problems.push(`Beta App Review contact details are missing: ${missing.join(", ")}.`);
+  if (detail?.demoAccountRequired && !(detail.demoAccountName || "").trim()) {
+    problems.push("Beta App Review says a demo account is required, but no demo account name is set.");
+  }
+  if (problems.length) {
+    return { allowed: false, build: build.version, readyForBetaReview: false, problems, note: "Nothing was prepared. Fix these first, then ask again." };
+  }
+  const preview = await prepareChange({
+    op: opFor2("POST", "/v1/betaAppReviewSubmissions"),
+    body: { data: { type: "betaAppReviewSubmissions", relationships: { build: { data: { type: "builds", id: build.id } } } } },
+    deps
+  });
+  return {
+    build: build.version,
+    readyForBetaReview: true,
+    note: "Apple reviews the build (usually within a day). Once approved, external groups that have this build can install it. Add the build to a group with asc_testflight_add_build_to_group if you have not already.",
+    ...preview
+  };
+}
 
 // subs.js
 var qs3 = (o) => {
@@ -38733,7 +38793,7 @@ function simplify(body) {
 var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(value, null, 2)) }] });
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
-var server = new McpServer({ name: "hypercaffium-apple", version: "0.9.0" });
+var server = new McpServer({ name: "hypercaffium-apple", version: "0.10.0" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();
@@ -39306,6 +39366,13 @@ featureTool(
   "Prepare making a processed build available to a TestFlight group. External groups need Apple's beta review for a new build. Tier 2.",
   { appId, buildNumber: external_exports.string(), group: external_exports.string().describe("TestFlight group name or id") },
   (a) => prepareAddBuildToGroup(writeDeps, a)
+);
+featureTool(
+  "testing",
+  "asc_testflight_submit_for_review",
+  "Prepare submitting a processed build to Apple's TestFlight beta review, which external testers need before they can install it. Checks first: build valid and not expired, export compliance answered, What to Test notes, TestFlight description and feedback email, beta review contact details, and that it was not already submitted. Returns the problems and NO ticket if anything is missing. Tier 2.",
+  { appId, buildNumber: external_exports.string().describe("Build number, e.g. 57") },
+  (a) => prepareBetaReview(writeDeps, a)
 );
 readTool(
   "asc_prepare_plan",

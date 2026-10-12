@@ -29212,8 +29212,8 @@ function currencyCode2(_params) {
   return _stringFormat(ZodCustomStringFormat, "currency_code", currencyCode, _params);
 }
 function hash(alg, params) {
-  const enc = params?.enc ?? "hex";
-  const format = `${alg}_${enc}`;
+  const enc2 = params?.enc ?? "hex";
+  const format = `${alg}_${enc2}`;
   const regex = regexes_exports[format];
   if (!regex)
     throw new Error(`Unrecognized hash format: ${format}`);
@@ -36888,6 +36888,10 @@ var UPLOAD_IMAGE = new RegExp(
   `^/upload${V3}applications/${PKG}/edits/${EDIT_ID}/listings/[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*/(icon|featureGraphic|phoneScreenshots|sevenInchScreenshots|tenInchScreenshots|tvBanner|tvScreenshots|wearScreenshots)$`
 );
 var PURCHASE_ACTIONS = /(:(refund|revoke|cancel|defer|consume|acknowledge))|\/(orders|purchases|externalTransactions|voidedpurchases)(\/|:|$)/i;
+var CONVERT_PRICES = new RegExp(`^${V3}applications/${PKG}/pricing:convertRegionPrices$`);
+var IMAGE_SET = new RegExp(
+  `^${V3}applications/${PKG}/edits/${EDIT_ID}/listings/[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*/(icon|featureGraphic|phoneScreenshots|sevenInchScreenshots|tenInchScreenshots|tvBanner|tvScreenshots|wearScreenshots)$`
+);
 var SIGNING = /\/appSigning(:|\/|$)/i;
 var DEV_USERS = new RegExp(`^${V3}developers/[0-9]+/users(/[^/]+(/grants(/[^/]+)?)?)?$`);
 function assertWriteAllowed(method, pathname, features = currentFeatures()) {
@@ -36904,7 +36908,7 @@ function assertWriteAllowed(method, pathname, features = currentFeatures()) {
   if (method === "POST" && (CREATE_EDIT.test(pathname) || COMMIT.test(pathname) || UPLOAD_IMAGE.test(pathname))) allowed = true;
   else if (["POST", "PUT", "PATCH"].includes(method)) {
     allowed = APP_PATH.test(pathname) && !/\/users(\/|$)|\/grants(\/|$)/.test(pathname) || Boolean(features.users) && DEV_USERS.test(pathname);
-  } else if (method === "DELETE") allowed = DELETE_EDIT.test(pathname);
+  } else if (method === "DELETE") allowed = DELETE_EDIT.test(pathname) || IMAGE_SET.test(pathname);
   if (!allowed) throw new Error(`Blocked by safety guard: ${method} ${pathname} is not an allowed change.`);
 }
 function assertAllowed(method, pathname) {
@@ -36913,7 +36917,7 @@ function assertAllowed(method, pathname) {
   }
   let allowed = false;
   if (method === "GET") allowed = SAFE_PATH.test(pathname) && !ACTION_SUFFIX.test(pathname);
-  else if (method === "POST") allowed = CREATE_EDIT.test(pathname);
+  else if (method === "POST") allowed = CREATE_EDIT.test(pathname) || CONVERT_PRICES.test(pathname);
   else if (method === "DELETE") allowed = DELETE_EDIT.test(pathname);
   if (!allowed) {
     throw new Error(`Blocked by safety guard: ${method} ${pathname} is not a read-only request.`);
@@ -36923,7 +36927,7 @@ function assertAllowed(method, pathname) {
 // client.js
 var API_ORIGIN = "https://androidpublisher.googleapis.com";
 var APP_BASE = "/androidpublisher/v3/applications";
-async function playRequest(method, pathname, query = {}) {
+async function playRequest(method, pathname, query = {}, body) {
   assertAllowed(method, pathname);
   const url2 = new URL(pathname, API_ORIGIN);
   for (const [k, v] of Object.entries(query)) {
@@ -36933,16 +36937,16 @@ async function playRequest(method, pathname, query = {}) {
   const init = { method, headers };
   if (method === "POST") {
     headers["Content-Type"] = "application/json";
-    init.body = "{}";
+    init.body = body ? JSON.stringify(body) : "{}";
   }
   const res = await fetch(url2, init);
   if (method === "DELETE" && res.status === 204) return {};
-  const body = await res.json().catch(() => ({}));
+  const json2 = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const e = body.error || {};
+    const e = json2.error || {};
     throw new Error(`Google Play API ${res.status} for ${url2.pathname}: ${e.message || e.status || "unknown error"}`);
   }
-  return body;
+  return json2;
 }
 async function withTemporaryEdit(pkg, fn) {
   const edit = await playRequest("POST", `${APP_BASE}/${pkg}/edits`);
@@ -37202,6 +37206,7 @@ async function prepareChange({ changes, deps }) {
     tier: worst,
     tierReason: (verdicts.find((v) => v.sensitive) || verdicts.find((v) => v.tier === worst)).reason,
     sensitive: sensitive || void 0,
+    feature: [...new Set(verdicts.map((v) => v.feature))].join(", "),
     ticket: ticket.id,
     expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
     app: pkg,
@@ -37507,7 +37512,7 @@ async function prepareUploadImages(deps, { packageName: packageName2, language =
   });
   if (!rule.single && existing.length + inspected.length > rule.max) {
     throw new Error(
-      `${imageType} already has ${existing.length} image(s); adding ${inspected.length} would exceed ${rule.max}. Removing images is a delete, which this plugin blocks. Remove old ones in Play Console first.`
+      `${imageType} already has ${existing.length} image(s); adding ${inspected.length} would exceed ${rule.max}. Use play_replace_images to swap the whole set instead.`
     );
   }
   const title = `Upload ${inspected.length} ${imageType} image(s) for ${language}`;
@@ -37531,6 +37536,47 @@ async function prepareUploadImages(deps, { packageName: packageName2, language =
     nextStep: "Show this to the owner in plain English and wait for an explicit yes, then apply with play_apply_change."
   };
 }
+async function prepareReplaceImages(deps, { packageName: packageName2, language = "en-US", imageType, files }) {
+  if (!currentFeatures().listing) {
+    return { allowed: false, tier: 3, blocked: true, reason: 'The "listing" feature is switched off in your settings. Run /hypercaffium-play:setup to see or change your settings.' };
+  }
+  const pkg = packageName2 || deps.defaultPackage();
+  if (!pkg || !/^[A-Za-z0-9._]+$/.test(pkg)) throw new Error("A valid packageName is required (or set defaultPackageName in the config file).");
+  if (!LANG.test(language)) throw new Error(`"${language}" is not a language code like en-US.`);
+  const rule = IMAGE_TYPES[imageType];
+  if (!rule) throw new Error(`imageType must be one of: ${Object.keys(IMAGE_TYPES).join(", ")}.`);
+  if (!Array.isArray(files) || files.length === 0) throw new Error("Pass files: the full set of new images (a replace never leaves the set empty).");
+  if (files.length > rule.max) throw new Error(`${imageType} takes at most ${rule.max} image(s).`);
+  const inspected = files.map((f) => inspectImage(f, rule, imageType));
+  if (rule.screenshot && imageType === "phoneScreenshots" && inspected.length < 2) {
+    throw new Error("Google Play needs at least 2 phone screenshots; pass 2 or more.");
+  }
+  const existing = await deps.withReadContext(pkg, true, async (editId) => {
+    const r = await deps.get(`${APP}/${pkg}/edits/${editId}/listings/${language}/${imageType}`, {});
+    return r.images || [];
+  });
+  const title = `Replace all ${existing.length} ${imageType} image(s) for ${language} with ${inspected.length} new one(s)`;
+  const payload = { kind: "images", replace: true, tier: 2, title, pkg, language, imageType, files: inspected, removing: existing.map((i) => i.id) };
+  const ticket = deps.store.create(payload);
+  return {
+    allowed: true,
+    kind: "images",
+    replace: true,
+    tier: 2,
+    tierReason: "store listing images are public on Google Play as soon as the change is committed, and the removed images are gone for good",
+    ticket: ticket.id,
+    expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
+    title,
+    app: pkg,
+    language,
+    imageType,
+    removing: existing.map((i) => ({ id: i.id, link: i.url })),
+    adding: inspected.map(({ name, size, width, height }) => ({ name, size, dimensions: `${width}x${height}` })),
+    committedTogether: "Removing the old images and uploading the new ones happen inside ONE Play edit and are committed together, or not at all.",
+    keepCopies: existing.length ? "Google keeps no copy of removed images. If the owner may want them back, save them from the links above first." : void 0,
+    nextStep: "Show this to the owner in plain English (how many images are removed and added) and wait for an explicit yes, then apply with play_apply_change."
+  };
+}
 async function runImages(payload, deps) {
   const { pkg, language, imageType, files } = payload;
   let edit;
@@ -37542,11 +37588,25 @@ async function runImages(payload, deps) {
       if (buf.length !== f.size || crypto3.createHash("md5").update(buf).digest("hex") !== f.md5) {
         throw new Error(`${f.name} changed on disk since the preview. Prepare again.`);
       }
+    }
+    if (payload.replace) {
+      const now = (await deps.get(`${APP}/${pkg}/edits/${edit.id}/listings/${language}/${imageType}`, {})).images || [];
+      const ids = now.map((i) => i.id).sort().join(",");
+      if (ids !== [...payload.removing || []].sort().join(",")) {
+        throw new Error("The images on Google Play changed since the preview. Prepare the replace again.");
+      }
+      await deps.send("DELETE", `${APP}/${pkg}/edits/${edit.id}/listings/${language}/${imageType}`, {}, void 0);
+    }
+    for (const f of files) {
+      const buf = fs6.readFileSync(f.path);
+      if (buf.length !== f.size || crypto3.createHash("md5").update(buf).digest("hex") !== f.md5) {
+        throw new Error(`${f.name} changed on disk since the preview. Prepare again.`);
+      }
       await deps.upload({ pkg, editId: edit.id, language, imageType, bytes: buf, mime: f.mime });
       done.push(f.name);
     }
     const commit = await deps.send("POST", `${APP}/${pkg}/edits/${edit.id}:commit`, {}, void 0);
-    return { applied: true, committed: true, tier: payload.tier, title: payload.title, uploaded: done, commit };
+    return { applied: true, committed: true, tier: payload.tier, title: payload.title, removed: payload.replace ? payload.removing.length : 0, uploaded: done, commit };
   } catch (err) {
     if (edit?.id) await deps.send("DELETE", `${APP}/${pkg}/edits/${edit.id}`, {}, void 0).catch(() => {
     });
@@ -37591,8 +37651,151 @@ async function subscriptionOverview(get, pkg) {
   return { app: pkg, subscriptions: subs, count: subs.length };
 }
 
-// release.js
+// pricing.js
 var APP3 = "/androidpublisher/v3/applications";
+var enc = encodeURIComponent;
+function toMoney(amount, currencyCode3) {
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) throw new Error("price must be a positive number, like 4.99.");
+  if (!/^[A-Z]{3}$/.test(currencyCode3)) throw new Error("currency must be a 3-letter code such as USD.");
+  const cents = Math.round(amount * 100);
+  if (Math.abs(cents / 100 - amount) > 1e-9) throw new Error("price may have at most 2 decimal places.");
+  return { currencyCode: currencyCode3, units: String(Math.floor(cents / 100)), nanos: cents % 100 * 1e7 };
+}
+var fromMoney = (m) => m ? Number(m.units || 0) + Number(m.nanos || 0) / 1e9 : null;
+var OFF = {
+  allowed: false,
+  tier: 3,
+  blocked: true,
+  reason: 'The "pricing" feature is switched off in your settings. Run /hypercaffium-play:setup to see or change your settings.'
+};
+var show = (m) => m ? `${fromMoney(m).toFixed(2)} ${m.currencyCode}` : "(none)";
+async function loadBasePlan(deps, pkg, productId, basePlanId) {
+  if (!productId || !basePlanId) throw new Error("Pass productId and basePlanId (see play_subscription_overview).");
+  const sub = await deps.get(`${APP3}/${pkg}/subscriptions/${enc(productId)}`, {});
+  const plan = (sub.basePlans || []).find((b) => b.basePlanId === basePlanId);
+  if (!plan) throw new Error(`Subscription ${productId} has no base plan "${basePlanId}". Base plans: ${(sub.basePlans || []).map((b) => b.basePlanId).join(", ")}.`);
+  return { sub, plan };
+}
+function pickRegions(plan, regions) {
+  const offered = (plan.regionalConfigs || []).map((c) => c.regionCode);
+  if (regions === "all" || regions === void 0) return offered;
+  if (!Array.isArray(regions) || regions.length === 0) throw new Error('regions must be "all" or a list of region codes such as ["US", "CA"].');
+  const unknown2 = regions.filter((r) => !offered.includes(r));
+  if (unknown2.length) throw new Error(`This base plan is not offered in: ${unknown2.join(", ")}.`);
+  return regions;
+}
+var slim = (preview) => ({
+  allowed: preview.allowed,
+  tier: preview.tier,
+  tierReason: preview.tierReason,
+  feature: preview.feature,
+  ticket: preview.ticket,
+  expires: preview.expires,
+  blocked: preview.blocked,
+  reason: preview.reason,
+  nextStep: preview.nextStep
+});
+async function prepareSetSubscriptionPrice(deps, { packageName: packageName2, productId, basePlanId, price, currency = "USD", regions = "all", includeOtherRegions = true }) {
+  if (!currentFeatures().pricing) return OFF;
+  const pkg = packageName2 || deps.defaultPackage();
+  const money = toMoney(price, currency);
+  const { sub, plan } = await loadBasePlan(deps, pkg, productId, basePlanId);
+  const chosen = pickRegions(plan, regions);
+  const converted = await deps.convert(pkg, { price: money });
+  const version2 = converted.regionVersion?.version;
+  if (!version2) throw new Error("Google did not return a regions version for the price conversion.");
+  const rows = [];
+  const newConfigs = (plan.regionalConfigs || []).map((c) => {
+    if (!chosen.includes(c.regionCode)) return c;
+    const local = c.price?.currencyCode === currency ? money : converted.convertedRegionPrices?.[c.regionCode]?.price;
+    if (!local) throw new Error(`Google gave no converted price for ${c.regionCode}.`);
+    const before = fromMoney(c.price);
+    const after = fromMoney(local);
+    rows.push({
+      region: c.regionCode,
+      from: show(c.price),
+      to: show(local),
+      change: before ? `${after >= before ? "+" : ""}${((after - before) / before * 100).toFixed(1)}%` : "new"
+    });
+    return { ...c, price: local };
+  });
+  const newPlan = { ...plan, regionalConfigs: newConfigs };
+  let otherRegions;
+  if (includeOtherRegions && regions === "all" && plan.otherRegionsConfig && converted.convertedOtherRegionsPrice) {
+    const o = converted.convertedOtherRegionsPrice;
+    newPlan.otherRegionsConfig = { ...plan.otherRegionsConfig, usdPrice: o.usdPrice, eurPrice: o.eurPrice };
+    otherRegions = { from: `${show(plan.otherRegionsConfig.usdPrice)} / ${show(plan.otherRegionsConfig.eurPrice)}`, to: `${show(o.usdPrice)} / ${show(o.eurPrice)}` };
+  }
+  const body = { packageName: pkg, productId, basePlans: (sub.basePlans || []).map((b) => b.basePlanId === basePlanId ? newPlan : b) };
+  const preview = await prepareChange({
+    changes: [
+      {
+        methodId: "monetization.subscriptions.patch",
+        params: { packageName: pkg, productId, updateMask: "basePlans", "regionsVersion.version": version2 },
+        body
+      }
+    ],
+    deps
+  });
+  return {
+    title: `Set ${productId} / ${basePlanId} to ${show(money)} in ${regions === "all" ? `all ${chosen.length} regions` : chosen.join(", ")}`,
+    whoPays: "NEW subscribers only. Existing subscribers keep paying their current price until you move them with play_migrate_subscription_prices (a separate step).",
+    regionsChanged: rows.length,
+    priceTable: rows,
+    otherRegions,
+    rounding: "Local prices are Google's own conversion of your price, rounded to each country's price rules.",
+    ...slim(preview)
+  };
+}
+var INCREASE = {
+  OPT_IN: {
+    api: "PRICE_INCREASE_TYPE_OPT_IN",
+    meaning: "Opt-in: for subscribers whose price goes UP, Google notifies them and they must ACCEPT the new price. Anyone who does not accept before their renewal is unsubscribed at the end of their current period."
+  },
+  OPT_OUT: {
+    api: "PRICE_INCREASE_TYPE_OPT_OUT",
+    meaning: "Opt-out: subscribers whose price goes UP are notified in advance and charged the new price unless they cancel. Google only allows this for small increases, in some countries, and not too often; it may refuse the request."
+  }
+};
+async function prepareMigratePrices(deps, { packageName: packageName2, productId, basePlanId, regions = "all", increaseType = "OPT_IN", oldestAllowedPriceVersionTime }) {
+  if (!currentFeatures().pricing) return OFF;
+  const pkg = packageName2 || deps.defaultPackage();
+  const kind = INCREASE[increaseType];
+  if (!kind) throw new Error("increaseType must be OPT_IN or OPT_OUT.");
+  const { plan } = await loadBasePlan(deps, pkg, productId, basePlanId);
+  const chosen = pickRegions(plan, regions);
+  const cutoff = oldestAllowedPriceVersionTime || (/* @__PURE__ */ new Date()).toISOString();
+  if (Number.isNaN(Date.parse(cutoff))) throw new Error("oldestAllowedPriceVersionTime must be a date-time like 2026-10-11T00:00:00Z.");
+  const sample = (plan.regionalConfigs || []).find((c) => c.regionCode === "US") || (plan.regionalConfigs || [])[0];
+  if (!sample?.price) throw new Error("This base plan has no regional prices to migrate.");
+  const converted = await deps.convert(pkg, { price: sample.price });
+  const version2 = converted.regionVersion?.version;
+  if (!version2) throw new Error("Google did not return a regions version.");
+  const body = {
+    regionalPriceMigrations: chosen.map((regionCode) => ({ regionCode, oldestAllowedPriceVersionTime: cutoff, priceIncreaseType: kind.api })),
+    regionsVersion: { version: version2 }
+  };
+  const preview = await prepareChange({
+    changes: [{ methodId: "monetization.subscriptions.basePlans.migratePrices", params: { packageName: pkg, productId, basePlanId }, body }],
+    deps
+  });
+  const prices = Object.fromEntries((plan.regionalConfigs || []).map((c) => [c.regionCode, show(c.price)]));
+  return {
+    title: `Move EXISTING ${productId} / ${basePlanId} subscribers to the current price in ${regions === "all" ? `all ${chosen.length} regions` : chosen.join(", ")}`,
+    customerImpact: [
+      `This changes what existing, paying customers are charged. Subscribers who signed up at a price set before ${cutoff} move to today's price for their region.`,
+      kind.meaning,
+      "Subscribers whose price goes DOWN simply pay less from their next renewal.",
+      "Google emails affected subscribers. This cannot be undone by the plugin; to reverse it you would set the old price again and migrate again."
+    ],
+    currentPrices: chosen.length <= 12 ? Object.fromEntries(chosen.map((r) => [r, prices[r]])) : `${chosen.length} regions (see play_subscription_overview)`,
+    ...slim(preview),
+    nextStep: preview.allowed ? "Read the customer impact to the owner in plain English, confirm the regions and opt-in/opt-out choice, and wait for an explicit yes. Then apply with play_apply_change." : preview.nextStep
+  };
+}
+
+// release.js
+var APP4 = "/androidpublisher/v3/applications";
 var NOTE_MAX = 500;
 var TRACK = /^[A-Za-z0-9_-]{1,40}$/;
 var LANG2 = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
@@ -37605,14 +37808,14 @@ function pkgOf2(deps, packageName2) {
 async function readTrack(deps, pkg, track) {
   if (!TRACK.test(track || "")) throw new Error(`"${track}" is not a valid track name (internal, alpha, beta, production, or a custom track).`);
   try {
-    const t = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP3}/${pkg}/edits/${editId}/tracks/${track}`, {}));
+    const t = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP4}/${pkg}/edits/${editId}/tracks/${track}`, {}));
     return { track: t.track || track, releases: t.releases || [] };
   } catch (err) {
     throw new Error(`Could not read the "${track}" track: ${err.message}`);
   }
 }
 async function readVersionCodes(deps, pkg) {
-  const b = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP3}/${pkg}/edits/${editId}/bundles`, {}));
+  const b = await deps.withReadContext(pkg, true, (editId) => deps.get(`${APP4}/${pkg}/edits/${editId}/bundles`, {}));
   return (b.bundles || []).map((x) => Number(x.versionCode)).filter((n) => Number.isInteger(n));
 }
 function checkNotes(notes) {
@@ -37815,7 +38018,9 @@ var writeDeps = {
   defaultPackage: () => loadConfig().defaultPackageName,
   writesEnabled: () => loadConfig().writesEnabled,
   // Reads for the "before" picture; opens a throwaway edit only when needed.
-  withReadContext: (pkg, needsEdit, fn) => needsEdit ? withTemporaryEdit(pkg, fn) : fn(null)
+  withReadContext: (pkg, needsEdit, fn) => needsEdit ? withTemporaryEdit(pkg, fn) : fn(null),
+  // Google's price converter: calculates local prices, changes nothing (allowed by the read guard).
+  convert: (pkg, body) => playRequest("POST", `${APP_BASE}/${pkg}/pricing:convertRegionPrices`, {}, body)
 };
 async function playUpload({ pkg, editId, language, imageType, bytes, mime }) {
   const pathname = `/upload${APP_BASE}/${pkg}/edits/${editId}/listings/${language}/${imageType}`;
@@ -37848,7 +38053,7 @@ var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 var packageName = external_exports.string().optional().describe("Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.");
-var server = new McpServer({ name: "hypercaffium-play", version: "0.9.0" });
+var server = new McpServer({ name: "hypercaffium-play", version: "0.10.0" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();
@@ -38224,11 +38429,52 @@ featureTool(
   },
   (a) => prepareUploadImages(writeDeps, a)
 );
+featureTool(
+  "listing",
+  "play_replace_images",
+  "Prepare REPLACING a whole listing image set (for example all phone screenshots for en-US) with new local PNG or JPEG files. The preview lists every image that will be removed (with a link to save it first) and every new file. Removing and uploading happen in ONE Play edit, committed together or not at all, so the listing is never left half-empty. Tier 2: needs the owner's explicit yes.",
+  {
+    packageName,
+    language: external_exports.string().default("en-US"),
+    imageType: external_exports.string().describe("For example phoneScreenshots, sevenInchScreenshots, featureGraphic"),
+    files: external_exports.array(external_exports.string()).min(1).max(8).describe("Full paths to ALL the new images, in display order")
+  },
+  (a) => prepareReplaceImages(writeDeps, a)
+);
 readTool(
   "play_subscription_overview",
   "List the app's Google Play subscriptions: product ids, titles, base plans (state, billing period, number of regions). Read-only. Needs the Manage orders and subscriptions permission. Edits go through play_prepare_change.",
   { packageName },
   async ({ packageName: p }) => subscriptionOverview((path7, q) => playRequest("GET", path7, q), resolvePackage(p))
+);
+featureTool(
+  "pricing",
+  "play_set_subscription_price",
+  "Prepare changing a subscription base plan's price. Google converts the price into each region's local currency; the preview shows a per-region table (old, new, percent). It applies to NEW subscribers only: existing subscribers keep their price until play_migrate_subscription_prices. Tier 2, never automatic. Ask the owner for the exact amount and which regions; never infer a price from a vague request.",
+  {
+    packageName,
+    productId: external_exports.string().describe("Subscription product id from play_subscription_overview"),
+    basePlanId: external_exports.string().describe("Base plan id, e.g. monthly"),
+    price: external_exports.number().describe("The new price, e.g. 2.99"),
+    currency: external_exports.string().default("USD").describe("Currency of that price"),
+    regions: external_exports.union([external_exports.literal("all"), external_exports.array(external_exports.string())]).default("all").describe('"all", or region codes such as ["US","CA"]'),
+    includeOtherRegions: external_exports.boolean().default(true).describe('With "all": also update the price for regions Google adds later')
+  },
+  (a) => prepareSetSubscriptionPrice(writeDeps, a)
+);
+featureTool(
+  "pricing",
+  "play_migrate_subscription_prices",
+  "Prepare moving EXISTING subscribers of a base plan to its current price (after a price change). This changes what paying customers are charged: the preview spells out who is affected, the opt-in or opt-out rules, and the current prices. Tier 2. Only on the owner's explicit request, with the regions and opt-in/opt-out confirmed.",
+  {
+    packageName,
+    productId: external_exports.string(),
+    basePlanId: external_exports.string(),
+    regions: external_exports.union([external_exports.literal("all"), external_exports.array(external_exports.string())]).default("all"),
+    increaseType: external_exports.enum(["OPT_IN", "OPT_OUT"]).default("OPT_IN").describe("For price increases: OPT_IN (customers must accept) or OPT_OUT (charged unless they cancel; limited by Google)"),
+    oldestAllowedPriceVersionTime: external_exports.string().optional().describe("Subscribers on prices set before this time are moved (default: now, so everyone on an older price)")
+  },
+  (a) => prepareMigratePrices(writeDeps, a)
 );
 readTool(
   "play_check_changes",

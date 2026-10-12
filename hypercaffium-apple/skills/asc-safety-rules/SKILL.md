@@ -1,7 +1,7 @@
 ---
 name: asc-safety-rules
 description: Use when working with App Store Connect, TestFlight, iOS build status, release notes, listing text, screenshots, submitting for App Review, phased release, subscriptions and prices, customer reviews, or App Review details. Explains the asc_ tools and the mandatory prepare-then-apply protocol for any change.
-version: 0.9.0
+version: 0.10.0
 ---
 
 # App Store Connect: how to use these tools safely
@@ -40,6 +40,7 @@ Every change tool below only **prepares**: it returns a preview (before and afte
 | App Review contact / demo account / notes | `asc_edit_review_details` (Tier 1 on a draft; the demo password is never shown or logged) |
 | App name, subtitle, privacy URLs | `asc_edit_app_info` (Tier 2: public on release) |
 | TestFlight notes / testers / builds | `asc_testflight_set_notes` (Tier 1), `asc_testflight_add_tester` and `asc_testflight_add_build_to_group` (Tier 2) |
+| External TestFlight beta review | `asc_testflight_submit_for_review` (checks Apple's requirements first and lists what is missing, with NO ticket, if anything is; Tier 2) |
 | Anything else (promo offers, offer codes, win-back, availability...) | `asc_search_api` + `asc_describe_operation` for the exact body, then `asc_prepare_change`; several dependent steps: `asc_prepare_plan` |
 
 Never work around a refusal: not by calling `asc_call` with a write, and not by re-preparing different values after the owner approved a different preview.

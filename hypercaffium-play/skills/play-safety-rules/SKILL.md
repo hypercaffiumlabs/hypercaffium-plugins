@@ -1,7 +1,7 @@
 ---
 name: play-safety-rules
 description: Use when working with Google Play Console, the Play Store, Android release tracks, staged rollouts, app bundles, store listing text and images, review replies, or subscriptions. Explains the play_ tools and the mandatory prepare-then-apply protocol for any change.
-version: 0.9.0
+version: 0.10.0
 ---
 
 # Google Play Console: how to use these tools safely
@@ -46,6 +46,16 @@ The tools check the version code was really uploaded (builds arrive from your ow
 | Reply publicly to a review (350 chars) | `play_reply_to_review` | Reply to reviews |
 | Edit title / short / full description | `play_edit_listing` | Manage store presence |
 | Upload icon, feature graphic, screenshots | `play_upload_images` (adds only; all-or-nothing commit) | Manage store presence |
+| Replace a whole image set (e.g. all phone screenshots) | `play_replace_images` (removes the old set and uploads the new one in ONE edit; the preview lists every removed image with a link to save it) | Manage store presence |
+
+### Subscription prices (each only PREPARES a ticket; permission: Manage orders and subscriptions)
+
+| Goal | Tool |
+|---|---|
+| Change a base plan's price | `play_set_subscription_price`: Google converts it to each region's currency; the preview is a per-region table. It applies to **new subscribers only**. |
+| Move existing subscribers to the current price | `play_migrate_subscription_prices`: changes what paying customers are charged. Read its `customerImpact` to the owner, confirm the regions and OPT_IN / OPT_OUT, and only then ask for a yes. |
+
+Never apply a price change or migration inferred from a vague request: ask for the exact amount, base plan and regions. Re-entering the current price can still move some regions (Google's conversion drifts); point out every row whose price changes.
 
 Granting a permission: Users and permissions, the service account, Manage permissions, tick it, Apply, Save changes, **then click Yes on the "Are you sure" prompt** (nothing saves until Yes). Ask the owner before each grant.
 

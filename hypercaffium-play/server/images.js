@@ -1,5 +1,6 @@
-// Google Play store-listing images (icon, feature graphic, screenshots). Adds only: removing images
-// is a delete, which stays blocked. Everything happens inside ONE Play edit, committed all-or-nothing.
+// Google Play store-listing images (icon, feature graphic, screenshots). Uploads add images; a
+// REPLACE clears one image set and uploads the new images inside the same edit. Everything happens
+// inside ONE Play edit, committed all-or-nothing, so the listing is never left half-empty.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -93,7 +94,7 @@ export async function prepareUploadImages(deps, { packageName, language = 'en-US
   });
   if (!rule.single && existing.length + inspected.length > rule.max) {
     throw new Error(
-      `${imageType} already has ${existing.length} image(s); adding ${inspected.length} would exceed ${rule.max}. Removing images is a delete, which this plugin blocks. Remove old ones in Play Console first.`,
+      `${imageType} already has ${existing.length} image(s); adding ${inspected.length} would exceed ${rule.max}. Use play_replace_images to swap the whole set instead.`,
     );
   }
 
@@ -119,6 +120,55 @@ export async function prepareUploadImages(deps, { packageName, language = 'en-US
   };
 }
 
+// Replace a whole image set: the current images of this type and language are removed and the new
+// ones uploaded, in one edit. The preview lists every image that will be removed, with its link, so
+// the owner can save copies first (Google keeps no copy once the change is committed).
+export async function prepareReplaceImages(deps, { packageName, language = 'en-US', imageType, files }) {
+  if (!currentFeatures().listing) {
+    return { allowed: false, tier: 3, blocked: true, reason: 'The "listing" feature is switched off in your settings. Run /hypercaffium-play:setup to see or change your settings.' };
+  }
+  const pkg = packageName || deps.defaultPackage();
+  if (!pkg || !/^[A-Za-z0-9._]+$/.test(pkg)) throw new Error('A valid packageName is required (or set defaultPackageName in the config file).');
+  if (!LANG.test(language)) throw new Error(`"${language}" is not a language code like en-US.`);
+  const rule = IMAGE_TYPES[imageType];
+  if (!rule) throw new Error(`imageType must be one of: ${Object.keys(IMAGE_TYPES).join(', ')}.`);
+  if (!Array.isArray(files) || files.length === 0) throw new Error('Pass files: the full set of new images (a replace never leaves the set empty).');
+  if (files.length > rule.max) throw new Error(`${imageType} takes at most ${rule.max} image(s).`);
+  const inspected = files.map((f) => inspectImage(f, rule, imageType));
+  if (rule.screenshot && imageType === 'phoneScreenshots' && inspected.length < 2) {
+    throw new Error('Google Play needs at least 2 phone screenshots; pass 2 or more.');
+  }
+
+  const existing = await deps.withReadContext(pkg, true, async (editId) => {
+    const r = await deps.get(`${APP}/${pkg}/edits/${editId}/listings/${language}/${imageType}`, {});
+    return r.images || [];
+  });
+
+  const title = `Replace all ${existing.length} ${imageType} image(s) for ${language} with ${inspected.length} new one(s)`;
+  const payload = { kind: 'images', replace: true, tier: 2, title, pkg, language, imageType, files: inspected, removing: existing.map((i) => i.id) };
+  const ticket = deps.store.create(payload);
+  return {
+    allowed: true,
+    kind: 'images',
+    replace: true,
+    tier: 2,
+    tierReason: 'store listing images are public on Google Play as soon as the change is committed, and the removed images are gone for good',
+    ticket: ticket.id,
+    expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
+    title,
+    app: pkg,
+    language,
+    imageType,
+    removing: existing.map((i) => ({ id: i.id, link: i.url })),
+    adding: inspected.map(({ name, size, width, height }) => ({ name, size, dimensions: `${width}x${height}` })),
+    committedTogether: 'Removing the old images and uploading the new ones happen inside ONE Play edit and are committed together, or not at all.',
+    keepCopies: existing.length
+      ? 'Google keeps no copy of removed images. If the owner may want them back, save them from the links above first.'
+      : undefined,
+    nextStep: 'Show this to the owner in plain English (how many images are removed and added) and wait for an explicit yes, then apply with play_apply_change.',
+  };
+}
+
 // ---- run -------------------------------------------------------------------
 
 export async function runImages(payload, deps) {
@@ -127,6 +177,22 @@ export async function runImages(payload, deps) {
   const done = [];
   try {
     edit = await deps.send('POST', `${APP}/${pkg}/edits`, {}, {});
+    // Check every file before touching anything, so a changed file never leaves an emptied set.
+    for (const f of files) {
+      const buf = fs.readFileSync(f.path);
+      if (buf.length !== f.size || crypto.createHash('md5').update(buf).digest('hex') !== f.md5) {
+        throw new Error(`${f.name} changed on disk since the preview. Prepare again.`);
+      }
+    }
+    if (payload.replace) {
+      // The set must still be exactly what the owner saw, or someone changed it in the meantime.
+      const now = (await deps.get(`${APP}/${pkg}/edits/${edit.id}/listings/${language}/${imageType}`, {})).images || [];
+      const ids = now.map((i) => i.id).sort().join(',');
+      if (ids !== [...(payload.removing || [])].sort().join(',')) {
+        throw new Error('The images on Google Play changed since the preview. Prepare the replace again.');
+      }
+      await deps.send('DELETE', `${APP}/${pkg}/edits/${edit.id}/listings/${language}/${imageType}`, {}, undefined);
+    }
     for (const f of files) {
       const buf = fs.readFileSync(f.path);
       if (buf.length !== f.size || crypto.createHash('md5').update(buf).digest('hex') !== f.md5) {
@@ -136,7 +202,7 @@ export async function runImages(payload, deps) {
       done.push(f.name);
     }
     const commit = await deps.send('POST', `${APP}/${pkg}/edits/${edit.id}:commit`, {}, undefined);
-    return { applied: true, committed: true, tier: payload.tier, title: payload.title, uploaded: done, commit };
+    return { applied: true, committed: true, tier: payload.tier, title: payload.title, removed: payload.replace ? payload.removing.length : 0, uploaded: done, commit };
   } catch (err) {
     if (edit?.id) await deps.send('DELETE', `${APP}/${pkg}/edits/${edit.id}`, {}, undefined).catch(() => {});
     return {

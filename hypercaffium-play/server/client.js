@@ -6,7 +6,8 @@ import { assertAllowed } from './guard.js';
 export const API_ORIGIN = 'https://androidpublisher.googleapis.com';
 export const APP_BASE = '/androidpublisher/v3/applications';
 
-export async function playRequest(method, pathname, query = {}) {
+// body: only for the read-only POSTs the guard allows (an empty edit, or a price conversion).
+export async function playRequest(method, pathname, query = {}, body) {
   assertAllowed(method, pathname); // refuse anything that is not provably read-only
   const url = new URL(pathname, API_ORIGIN);
   for (const [k, v] of Object.entries(query)) {
@@ -16,16 +17,16 @@ export async function playRequest(method, pathname, query = {}) {
   const init = { method, headers };
   if (method === 'POST') {
     headers['Content-Type'] = 'application/json';
-    init.body = '{}'; // empty edit
+    init.body = body ? JSON.stringify(body) : '{}'; // empty edit, or a price-conversion request
   }
   const res = await fetch(url, init);
   if (method === 'DELETE' && res.status === 204) return {};
-  const body = await res.json().catch(() => ({}));
+  const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const e = body.error || {};
+    const e = json.error || {};
     throw new Error(`Google Play API ${res.status} for ${url.pathname}: ${e.message || e.status || 'unknown error'}`);
   }
-  return body;
+  return json;
 }
 
 // Open a temporary edit, run the read, always delete the edit again.

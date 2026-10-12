@@ -31,6 +31,16 @@ const UPLOAD_IMAGE = new RegExp(
 // depend only on the method-id rules in rules.js.
 const PURCHASE_ACTIONS = /(:(refund|revoke|cancel|defer|consume|acknowledge))|\/(orders|purchases|externalTransactions|voidedpurchases)(\/|:|$)/i;
 
+// Google's price converter: a POST that only calculates (it changes nothing), used by price previews.
+const CONVERT_PRICES = new RegExp(`^${V3}applications/${PKG}/pricing:convertRegionPrices$`);
+
+// The ONE delete of listing content the plugin may send: clearing one image set of one language
+// INSIDE an open edit, as the first step of replacing it. The edit is committed together with the
+// new uploads or discarded, so the listing is never left half-empty.
+const IMAGE_SET = new RegExp(
+  `^${V3}applications/${PKG}/edits/${EDIT_ID}/listings/[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*/(icon|featureGraphic|phoneScreenshots|sevenInchScreenshots|tenInchScreenshots|tvBanner|tvScreenshots|wearScreenshots)$`,
+);
+
 // App signing key enrollment and rotation (rotation cannot be undone).
 const SIGNING = /\/appSigning(:|\/|$)/i;
 // Developer-account users and their per-app grants live outside /applications/.
@@ -54,7 +64,7 @@ export function assertWriteAllowed(method, pathname, features = currentFeatures(
     allowed =
       (APP_PATH.test(pathname) && !/\/users(\/|$)|\/grants(\/|$)/.test(pathname)) || (Boolean(features.users) && DEV_USERS.test(pathname));
   }
-  else if (method === 'DELETE') allowed = DELETE_EDIT.test(pathname); // only to discard an edit
+  else if (method === 'DELETE') allowed = DELETE_EDIT.test(pathname) || IMAGE_SET.test(pathname); // discard an edit, or clear one image set inside it
   if (!allowed) throw new Error(`Blocked by safety guard: ${method} ${pathname} is not an allowed change.`);
 }
 
@@ -65,7 +75,7 @@ export function assertAllowed(method, pathname) {
   }
   let allowed = false;
   if (method === 'GET') allowed = SAFE_PATH.test(pathname) && !ACTION_SUFFIX.test(pathname);
-  else if (method === 'POST') allowed = CREATE_EDIT.test(pathname);
+  else if (method === 'POST') allowed = CREATE_EDIT.test(pathname) || CONVERT_PRICES.test(pathname);
   else if (method === 'DELETE') allowed = DELETE_EDIT.test(pathname);
   if (!allowed) {
     throw new Error(`Blocked by safety guard: ${method} ${pathname} is not a read-only request.`);

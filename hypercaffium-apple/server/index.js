@@ -32,6 +32,7 @@ import { prepareClearScreenshots, prepareScreenshots, runScreenshots } from './s
 import {
   prepareAddBuildToGroup,
   prepareAddTester,
+  prepareBetaReview,
   prepareAppInfo,
   prepareReplyToReview,
   prepareReviewDetails,
@@ -118,7 +119,7 @@ const ok = (value) => ({ content: [{ type: 'text', text: limitText(JSON.stringif
 const fail = (err) => ({ isError: true, content: [{ type: 'text', text: String(err.message || err) }] });
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 
-const server = new McpServer({ name: 'hypercaffium-apple', version: '0.9.0' });
+const server = new McpServer({ name: 'hypercaffium-apple', version: '0.10.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -744,6 +745,14 @@ featureTool('testing',
   "Prepare making a processed build available to a TestFlight group. External groups need Apple's beta review for a new build. Tier 2.",
   { appId, buildNumber: z.string(), group: z.string().describe("TestFlight group name or id") },
   (a) => prepareAddBuildToGroup(writeDeps, a),
+);
+
+featureTool(
+  'testing',
+  'asc_testflight_submit_for_review',
+  "Prepare submitting a processed build to Apple's TestFlight beta review, which external testers need before they can install it. Checks first: build valid and not expired, export compliance answered, What to Test notes, TestFlight description and feedback email, beta review contact details, and that it was not already submitted. Returns the problems and NO ticket if anything is missing. Tier 2.",
+  { appId, buildNumber: z.string().describe('Build number, e.g. 57') },
+  (a) => prepareBetaReview(writeDeps, a),
 );
 
 // ---- generic multi-step plans, and monitoring ---------------------------------

@@ -21,8 +21,9 @@ import { currentFeatures, setFeatureSource } from './rules.js';
 import { describeFeatures, isCritical, saveSettings } from '../../shared/features.js';
 import { googleCheckChanges } from './monitor.js';
 import { prepareEditListing, prepareReplyToReview } from './listing.js';
-import { prepareUploadImages, runImages } from './images.js';
+import { prepareReplaceImages, prepareUploadImages, runImages } from './images.js';
 import { subscriptionOverview } from './subscriptions.js';
+import { prepareMigratePrices, prepareSetSubscriptionPrice } from './pricing.js';
 import { prepareReleaseNotes, preparePromote, prepareRollout, prepareSetRelease } from './release.js';
 
 const PLUGIN = 'google-play-console';
@@ -77,6 +78,8 @@ const writeDeps = {
   writesEnabled: () => loadConfig().writesEnabled,
   // Reads for the "before" picture; opens a throwaway edit only when needed.
   withReadContext: (pkg, needsEdit, fn) => (needsEdit ? withTemporaryEdit(pkg, fn) : fn(null)),
+  // Google's price converter: calculates local prices, changes nothing (allowed by the read guard).
+  convert: (pkg, body) => playRequest('POST', `${APP_BASE}/${pkg}/pricing:convertRegionPrices`, {}, body),
 };
 
 // Listing images go through Google's media-upload endpoint, only after a valid ticket (see runImages).
@@ -117,7 +120,7 @@ const packageName = z
   .optional()
   .describe('Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.');
 
-const server = new McpServer({ name: 'hypercaffium-play', version: '0.9.0' });
+const server = new McpServer({ name: 'hypercaffium-play', version: '0.10.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -539,11 +542,55 @@ featureTool('listing',
   (a) => prepareUploadImages(writeDeps, a),
 );
 
+featureTool(
+  'listing',
+  'play_replace_images',
+  "Prepare REPLACING a whole listing image set (for example all phone screenshots for en-US) with new local PNG or JPEG files. The preview lists every image that will be removed (with a link to save it first) and every new file. Removing and uploading happen in ONE Play edit, committed together or not at all, so the listing is never left half-empty. Tier 2: needs the owner's explicit yes.",
+  {
+    packageName,
+    language: z.string().default('en-US'),
+    imageType: z.string().describe('For example phoneScreenshots, sevenInchScreenshots, featureGraphic'),
+    files: z.array(z.string()).min(1).max(8).describe('Full paths to ALL the new images, in display order'),
+  },
+  (a) => prepareReplaceImages(writeDeps, a),
+);
+
 readTool(
   "play_subscription_overview",
   "List the app's Google Play subscriptions: product ids, titles, base plans (state, billing period, number of regions). Read-only. Needs the Manage orders and subscriptions permission. Edits go through play_prepare_change.",
   { packageName },
   async ({ packageName: p }) => subscriptionOverview((path, q) => playRequest("GET", path, q), resolvePackage(p)),
+);
+
+featureTool(
+  'pricing',
+  'play_set_subscription_price',
+  "Prepare changing a subscription base plan's price. Google converts the price into each region's local currency; the preview shows a per-region table (old, new, percent). It applies to NEW subscribers only: existing subscribers keep their price until play_migrate_subscription_prices. Tier 2, never automatic. Ask the owner for the exact amount and which regions; never infer a price from a vague request.",
+  {
+    packageName,
+    productId: z.string().describe('Subscription product id from play_subscription_overview'),
+    basePlanId: z.string().describe('Base plan id, e.g. monthly'),
+    price: z.number().describe('The new price, e.g. 2.99'),
+    currency: z.string().default('USD').describe('Currency of that price'),
+    regions: z.union([z.literal('all'), z.array(z.string())]).default('all').describe('"all", or region codes such as ["US","CA"]'),
+    includeOtherRegions: z.boolean().default(true).describe('With "all": also update the price for regions Google adds later'),
+  },
+  (a) => prepareSetSubscriptionPrice(writeDeps, a),
+);
+
+featureTool(
+  'pricing',
+  'play_migrate_subscription_prices',
+  "Prepare moving EXISTING subscribers of a base plan to its current price (after a price change). This changes what paying customers are charged: the preview spells out who is affected, the opt-in or opt-out rules, and the current prices. Tier 2. Only on the owner's explicit request, with the regions and opt-in/opt-out confirmed.",
+  {
+    packageName,
+    productId: z.string(),
+    basePlanId: z.string(),
+    regions: z.union([z.literal('all'), z.array(z.string())]).default('all'),
+    increaseType: z.enum(['OPT_IN', 'OPT_OUT']).default('OPT_IN').describe('For price increases: OPT_IN (customers must accept) or OPT_OUT (charged unless they cancel; limited by Google)'),
+    oldestAllowedPriceVersionTime: z.string().optional().describe('Subscribers on prices set before this time are moved (default: now, so everyone on an older price)'),
+  },
+  (a) => prepareMigratePrices(writeDeps, a),
 );
 
 readTool(
