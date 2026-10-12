@@ -16,7 +16,7 @@ Every change is **previewed, confirmed and logged**. Nothing happens without you
 | **App Review & info** | `asc_edit_review_details`, `asc_edit_app_info` |
 | **TestFlight** | `asc_testflight_overview`, `asc_testflight_set_notes`, `asc_testflight_add_tester`, `asc_testflight_add_build_to_group`, `asc_testflight_submit_for_review` |
 | **Everything else in Apple's API** | `asc_search_api`, `asc_describe_operation`, `asc_call` (reads), `asc_prepare_change` / `asc_prepare_plan` (writes) |
-| **Monitoring** | `asc_check_changes`, `asc_audit_log` |
+| **Monitoring** | `asc_check_changes`, `asc_audit_log`, plus the commands `/hypercaffium-apple:release-status` and `/hypercaffium-apple:check-changes` (App Store, and Google Play too when hypercaffium-play is installed) |
 
 It indexes Apple's full OpenAPI description (1,300+ operations), so anything the API offers is reachable. See [COVERAGE.md](COVERAGE.md) for what Apple's API does and does not cover.
 
@@ -51,18 +51,17 @@ Requires [Claude Code](https://claude.com/claude-code) and Node.js 20 or newer.
 /plugin install hypercaffium-apple@hypercaffium
 ```
 
-### Install all three
+### Both stores
 
-If you publish on both stores, the first command adds the Hypercaffium catalog and the other three install one plugin each:
+If you publish on both, install both plugins:
 
 ```
 /plugin marketplace add hypercaffiumlabs/hypercaffium-plugins
 /plugin install hypercaffium-apple@hypercaffium
 /plugin install hypercaffium-play@hypercaffium
-/plugin install glue@hypercaffium
 ```
 
-`glue` only adds commands that report on both stores at once. If you publish on one store only, skip it.
+With both installed, `/hypercaffium-apple:release-status` and `/hypercaffium-apple:check-changes` report on both stores in one answer. The order you install them in does not matter; restart Claude Code once after installing a plugin.
 
 ## Access settings
 

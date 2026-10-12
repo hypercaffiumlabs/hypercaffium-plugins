@@ -48,18 +48,17 @@ Requires [Claude Code](https://claude.com/claude-code) and Node.js 20 or newer.
 /plugin install hypercaffium-play@hypercaffium
 ```
 
-### Install all three
+### Both stores
 
-If you publish on both stores, the first command adds the Hypercaffium catalog and the other three install one plugin each:
+If you publish on both, install both plugins:
 
 ```
 /plugin marketplace add hypercaffiumlabs/hypercaffium-plugins
 /plugin install hypercaffium-apple@hypercaffium
 /plugin install hypercaffium-play@hypercaffium
-/plugin install glue@hypercaffium
 ```
 
-`glue` only adds commands that report on both stores at once. If you publish on one store only, skip it.
+With both installed, `/hypercaffium-apple:release-status` and `/hypercaffium-apple:check-changes` report on both stores in one answer. The order you install them in does not matter; restart Claude Code once after installing a plugin.
 
 ## Access settings
 

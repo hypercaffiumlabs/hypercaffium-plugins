@@ -13,11 +13,6 @@
       "name": "hypercaffium-play",
       "source": "./hypercaffium-play",
       "description": "Manage Google Play from Claude: release status, tracks and staged rollouts, listing text and images, review replies and subscriptions. Every change is previewed, confirmed and audited."
-    },
-    {
-      "name": "glue",
-      "source": "./hypercaffium-glue",
-      "description": "Cross-store commands for people who publish on both the App Store and Google Play: one combined release status and one combined change report. Needs hypercaffium-apple and hypercaffium-play."
     }
   ],
   "metadata": {
