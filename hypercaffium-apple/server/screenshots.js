@@ -4,7 +4,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { EDITABLE_VERSION_STATES } from './rules.js';
+import { currentFeatures, EDITABLE_VERSION_STATES } from './rules.js';
 import { findOperation } from './plans.js';
 import { findVersion, list, resolveApp } from './release.js';
 import { preparePlan } from './plans.js';
@@ -56,6 +56,9 @@ export function inspectFile(p) {
 // ---- prepare ---------------------------------------------------------------
 
 export async function prepareScreenshots(deps, { appId, version, locale = 'en-US', displayType, files, platform = 'IOS' }) {
+  if (!currentFeatures().listing) {
+    return { allowed: false, tier: 3, blocked: true, reason: 'The "listing" feature is switched off in your settings. Run /hypercaffium-apple:setup to see or change your settings.' };
+  }
   if (!Array.isArray(files) || files.length === 0) throw new Error('Pass files: a list of full paths to PNG or JPEG screenshots.');
   if (files.length > MAX_PER_SET) throw new Error(`At most ${MAX_PER_SET} screenshots per set.`);
   const setOp = findOperation('POST', '/v1/appScreenshotSets');

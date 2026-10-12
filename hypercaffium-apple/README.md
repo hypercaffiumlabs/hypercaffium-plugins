@@ -26,7 +26,7 @@ It indexes Apple's full OpenAPI description (1,300+ operations), so anything the
 2. **Tiers, enforced by the server (not just by instructions):**
    - **Tier 1** can run without a prompt: low-risk edits to a version that is still a draft.
    - **Tier 2** needs your explicit approval: submissions, anything on a live version, public replies, anything that changes what customers pay.
-   - **Tier 3** is blocked: deletes (except draft screenshots), users, keys, certificates.
+   - **Tier 3** is blocked: deletes (except draft screenshots), API keys, and any area switched off in your access settings.
 3. **Kill switch.** Writes are **off by default**. Turn them on with `"writesEnabled": true` in the config file; remove it to go read-only again.
 4. **Audit log.** Every change is recorded with its before and after values. Secrets and passwords are never logged.
 5. **Everything is validated** against Apple's request schemas before it is sent.
@@ -34,6 +34,7 @@ It indexes Apple's full OpenAPI description (1,300+ operations), so anything the
 ## Security model and its limits
 
 - **What stops a bad change:** the server classifies every change into a tier and refuses blocked ones before anything is sent. This is code, not just instructions to the AI.
+- **Settings:** the settings file is yours. Claude could edit it like any file, so the terminal-only rule for critical areas is a strong lock against mistakes, not against someone who controls your computer.
 - **What a "yes" really is:** the plugin cannot see who is approving. A Tier 2 change runs when the apply tool is called with a valid ticket, so the human gate is **Claude Code's own permission prompt** for that tool. Do not add `*_apply_change` to your always-allow list. It is safe to always-allow only `*_apply_safe_change`, which refuses anything above Tier 1.
 - **Local trust:** anything that can run code as you can already read your key file and call Apple's or Google's API directly. The plugin does not defend against a compromised computer. Keep the key file readable only by you.
 - **Least privilege:** give the key or service account only the roles you need (App Manager, not Admin; the Play permissions in the table above). Revoke it in the store console if you stop using the plugin.
@@ -63,7 +64,30 @@ If you publish on both stores, the first command adds the Hypercaffium catalog a
 
 `glue` only adds commands that report on both stores at once. If you publish on one store only, skip it.
 
+## Access settings
+
+Run **`/hypercaffium-apple:setup`** after installing. It connects your account (no hand-edited JSON) and shows a menu of what the plugin may change, grouped by risk:
+
+| Risk | Areas | Default |
+|---|---|---|
+| Low | TestFlight | On |
+| Medium | Store listing, review replies, marketing pages | On |
+| High | Releases, prices and offers, uploading app files, everything else in the API | On |
+| Critical | Users and permissions, signing keys (certificates, profiles, bundle IDs, devices) | **Off** |
+
+Switched-off areas are refused by the server for every route, not just hidden. Switching something off takes effect at once; restart Claude Code after changes so the dedicated tools match.
+
+**Critical areas can only be switched on in a terminal menu**, which needs a real keyboard, so Claude cannot switch them on for you. Open a terminal window yourself and run:
+
+```
+node "<plugin folder>/server/dist/setup.mjs"
+```
+
+(`/hypercaffium-apple:setup` prints the exact path.) Critical changes are applied through a separate approval tool, `asc_apply_sensitive_change`, so allowing `asc_apply_change` can never cover them.
+
 ## Set up
+
+The easiest way is **`/hypercaffium-apple:setup`**, which asks for these details and writes the settings file for you. To do it by hand:
 
 1. In App Store Connect: **Users and Access > Integrations > App Store Connect API**.
 2. Note the **Issuer ID** at the top of the page.

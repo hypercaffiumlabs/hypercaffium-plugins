@@ -1,7 +1,7 @@
 ---
 name: asc-safety-rules
 description: Use when working with App Store Connect, TestFlight, iOS build status, release notes, listing text, screenshots, submitting for App Review, phased release, subscriptions and prices, customer reviews, or App Review details. Explains the asc_ tools and the mandatory prepare-then-apply protocol for any change.
-version: 0.7.1
+version: 0.9.0
 ---
 
 # App Store Connect: how to use these tools safely
@@ -48,9 +48,17 @@ Never work around a refusal: not by calling `asc_call` with a write, and not by 
 
 - **Tier 1 (may run without a prompt; tell the owner afterwards):** TestFlight notes; text, settings, build choice and App Review details of a *draft* version; creating a new draft version; adding screenshots to a draft.
 - **Tier 2 (preview, then the owner's explicit "yes", every time):** submitting, cancelling, phased release actions, releasing, anything on a live version, public replies, and **every subscription or price change** (it changes what customers pay).
-- **Tier 3 (blocked, no ticket):** every delete except removing a single screenshot of a draft version (Tier 2, and the server proves the version is a draft); users and invitations, API keys, certificates, profiles, devices, bundle IDs.
+- **Tier 3 (blocked, no ticket):** every delete except removing a single screenshot of a draft version (Tier 2, and the server proves the version is a draft); API keys; and every area whose feature switch is off (users and signing are off unless the owner switched them on).
 
 Building or listing these tools is not permission to use them: a real submit, price change or release needs the owner's explicit request for that release.
+
+### Feature switches (enforced by the server)
+
+The owner chooses which areas this plugin may change, grouped by risk: Low (testing), Medium (listing, review replies, marketing pages), High (releases, prices, uploading app files, everything else in the API) and Critical (users and permissions, signing keys). A switched-off area is refused for every route, including `asc_prepare_change`. `asc_settings` shows the current switches.
+
+- If a change is refused because its feature is off, tell the owner which switch it is and that `/hypercaffium-apple:setup` changes it. Do not look for another way.
+- **Critical** changes are previewed like any other, but can only be applied with `asc_apply_sensitive_change`. Before applying, say plainly what could go wrong (for signing: it can break builds made by EAS or Xcode).
+- Never switch a feature on, never call `asc_save_settings` unless the owner is choosing settings right now, and never edit the settings file directly. Critical features can only be switched on by the owner in a terminal menu; `asc_save_settings` refuses it.
 
 ### Submitting: what to say
 

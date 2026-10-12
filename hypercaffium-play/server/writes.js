@@ -2,7 +2,7 @@
 // On Play, changes live inside an "edit" that is committed all-or-nothing, so one ticket may bundle
 // several changes. Network access is injected so every rule here can be tested offline.
 import crypto from 'node:crypto';
-import { classify } from './rules.js';
+import { classify, currentFeatures } from './rules.js';
 import { fillPath, getMethod, splitParams } from './spec.js';
 import { toLocalTime } from './util.js';
 
@@ -121,6 +121,7 @@ export async function prepareChange({ changes, deps }) {
 
   const verdicts = resolved.map((r) => classify(r.method));
   const worst = Math.max(...verdicts.map((v) => v.tier));
+  const sensitive = verdicts.some((v) => v.sensitive);
   const operations = resolved.map((r) => ({
     methodId: r.method.id,
     httpMethod: r.method.method,
@@ -151,11 +152,12 @@ export async function prepareChange({ changes, deps }) {
     return out;
   });
 
-  const ticket = deps.store.create({ resolved, tier: worst, pkg, editScoped: scopedCount > 0, befores: befores.map((b) => b.before) });
+  const ticket = deps.store.create({ resolved, tier: worst, sensitive, pkg, editScoped: scopedCount > 0, befores: befores.map((b) => b.before) });
   return {
     allowed: true,
     tier: worst,
-    tierReason: verdicts.find((v) => v.tier === worst).reason,
+    tierReason: (verdicts.find((v) => v.sensitive) || verdicts.find((v) => v.tier === worst)).reason,
+    sensitive: sensitive || undefined,
     ticket: ticket.id,
     expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
     app: pkg,
@@ -167,16 +169,36 @@ export async function prepareChange({ changes, deps }) {
       beforeNote: befores[i].note,
       requestBody: r.body,
     })),
-    nextStep:
-      worst === 1
-        ? 'Low risk. Apply with play_apply_safe_change (or play_apply_change).'
-        : 'Show this preview to the owner in plain English and wait for their explicit "yes", then apply with play_apply_change.',
+    nextStep: nextStepFor(worst, sensitive),
   };
+}
+
+export function nextStepFor(tier, sensitive) {
+  if (sensitive) {
+    return 'CRITICAL change. Show this preview to the owner in plain English, say plainly what could go wrong, and wait for their explicit "yes". Then apply with play_apply_sensitive_change (play_apply_change refuses it).';
+  }
+  return tier === 1
+    ? 'Low risk. Apply with play_apply_safe_change (or play_apply_change).'
+    : 'Show this preview to the owner in plain English and wait for their explicit "yes", then apply with play_apply_change.';
+}
+
+// Sensitive tickets need the sensitive apply tool, and that tool takes nothing else. Keeping the two
+// apart means an "always allow" on play_apply_change can never cover a critical change.
+export function checkApplyTool(payload, { requireTier1 = false, sensitiveTool = false } = {}) {
+  if (payload.sensitive && !sensitiveTool) {
+    throw new Error('This is a CRITICAL change (users, signing or refunds). It can only be applied with play_apply_sensitive_change, after the owner says yes.');
+  }
+  if (!payload.sensitive && sensitiveTool) {
+    throw new Error('play_apply_sensitive_change only applies critical changes. Use play_apply_change (or play_apply_safe_change) for this ticket.');
+  }
+  if (requireTier1 && payload.tier !== 1) {
+    throw new Error('This ticket is not low-risk (Tier 2). It must be applied with play_apply_change so the owner is asked first.');
+  }
 }
 
 // ---- apply -----------------------------------------------------------------
 
-export async function applyChange({ ticketId, requireTier1 = false, deps }) {
+export async function applyChange({ ticketId, requireTier1 = false, sensitiveTool = false, deps }) {
   if (!deps.writesEnabled()) {
     throw new Error(
       'Writes are switched off (kill switch). To allow changes, set "writesEnabled": true in the plugin config file. Previews still work.',
@@ -184,17 +206,18 @@ export async function applyChange({ ticketId, requireTier1 = false, deps }) {
   }
   const ticket = deps.store.peek(ticketId);
   const p = ticket.payload;
-  if (requireTier1 && p.tier !== 1) {
-    throw new Error('This ticket is not low-risk (Tier 2). It must be applied with play_apply_change so the owner is asked first.');
-  }
+  checkApplyTool(p, { requireTier1, sensitiveTool });
   // Image uploads carry their own execution logic (a media upload inside one Play edit).
   if (p.kind === 'images') {
+    if (!currentFeatures().listing) throw new Error('The "listing" feature was switched off since the preview, so this upload is refused.');
     deps.store.markUsed(ticketId);
     return deps.runImages(p);
   }
   // Re-check the rules right now (they could have been tightened since the preview).
-  const worst = Math.max(...p.resolved.map((r) => classify(r.method).tier));
-  if (worst === 3) throw new Error('Blocked: this change is no longer allowed.');
+  const now = p.resolved.map((r) => classify(r.method));
+  const worst = Math.max(...now.map((v) => v.tier));
+  if (worst === 3) throw new Error(`Blocked: ${now.find((v) => v.tier === 3).reason}`);
+  if (now.some((v) => v.sensitive) !== Boolean(p.sensitive)) throw new Error('The rules changed since the preview. Prepare the change again.');
   if (worst > p.tier) throw new Error('The rules changed since the preview. Prepare the change again.');
 
   deps.store.markUsed(ticketId); // single use, even if a request below fails

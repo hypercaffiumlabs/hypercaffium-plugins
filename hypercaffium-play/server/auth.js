@@ -27,6 +27,10 @@ export function loadConfig() {
     defaultPackageName: process.env.PLAY_PACKAGE_NAME || file.defaultPackageName || '',
     writesEnabled: rawWrites === true || /^(1|true|yes)$/i.test(String(rawWrites || '')),
     timezone: process.env.HYPERCAFFIUM_TIMEZONE || file.timezone || '',
+    // Feature switches (see shared/features.js); missing ones fall back to their defaults.
+    features: file.features && typeof file.features === 'object' ? file.features : {},
+    // True once the setup menu has saved settings at least once.
+    configured: Boolean(file.features),
     fileError,
   };
 }

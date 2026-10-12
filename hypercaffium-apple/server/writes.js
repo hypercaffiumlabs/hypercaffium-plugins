@@ -1,7 +1,7 @@
 // The two-step write engine: prepare (preview + ticket) then apply (execute exactly that).
 // Network access is injected so every rule here can be tested offline.
 import crypto from 'node:crypto';
-import { classify } from './rules.js';
+import { classify, currentFeatures } from './rules.js';
 import { applyPlanPayload } from './plans.js';
 import { fillPath, validateBody as validateSchema } from './spec.js';
 import { toLocalTime } from './util.js';
@@ -134,11 +134,14 @@ export async function prepareChange({ op, pathParams = {}, query = {}, body, dep
   }
 
   const changes = diffAttributes(before, body);
-  const ticket = deps.store.create({ op, pathParams, query, body, filledPath, tier: verdict.tier, before });
+  const sensitive = Boolean(verdict.sensitive);
+  const ticket = deps.store.create({ op, pathParams, query, body, filledPath, tier: verdict.tier, before, sensitive, feature: verdict.feature });
   return {
     allowed: true,
     tier: verdict.tier,
     tierReason: verdict.reason,
+    feature: verdict.feature,
+    sensitive: sensitive || undefined,
     ticket: ticket.id,
     expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
     operation,
@@ -146,16 +149,36 @@ export async function prepareChange({ op, pathParams = {}, query = {}, body, dep
     before,
     beforeNote,
     requestBody: body,
-    nextStep:
-      verdict.tier === 1
-        ? 'Low risk. Apply with asc_apply_safe_change (or asc_apply_change).'
-        : 'Show this preview to the owner in plain English and wait for their explicit "yes", then apply with asc_apply_change.',
+    nextStep: nextStepFor(verdict.tier, sensitive),
   };
+}
+
+export function nextStepFor(tier, sensitive) {
+  if (sensitive) {
+    return 'CRITICAL change. Show this preview to the owner in plain English, say plainly what could go wrong, and wait for their explicit "yes". Then apply with asc_apply_sensitive_change (asc_apply_change refuses it).';
+  }
+  return tier === 1
+    ? 'Low risk. Apply with asc_apply_safe_change (or asc_apply_change).'
+    : 'Show this preview to the owner in plain English and wait for their explicit "yes", then apply with asc_apply_change.';
+}
+
+// Sensitive tickets need the sensitive apply tool, and that tool takes nothing else. Keeping the two
+// apart means an "always allow" on asc_apply_change can never cover a critical change.
+export function checkApplyTool(payload, { requireTier1 = false, sensitiveTool = false } = {}) {
+  if (payload.sensitive && !sensitiveTool) {
+    throw new Error('This is a CRITICAL change (users or signing). It can only be applied with asc_apply_sensitive_change, after the owner says yes.');
+  }
+  if (!payload.sensitive && sensitiveTool) {
+    throw new Error('asc_apply_sensitive_change only applies critical changes. Use asc_apply_change (or asc_apply_safe_change) for this ticket.');
+  }
+  if (requireTier1 && payload.tier !== 1) {
+    throw new Error('This ticket is not low-risk (Tier 2). It must be applied with asc_apply_change so the owner is asked first.');
+  }
 }
 
 // ---- apply -----------------------------------------------------------------
 
-export async function applyChange({ ticketId, requireTier1 = false, deps }) {
+export async function applyChange({ ticketId, requireTier1 = false, sensitiveTool = false, deps }) {
   if (!deps.writesEnabled()) {
     throw new Error(
       'Writes are switched off (kill switch). To allow changes, set "writesEnabled": true in the plugin config file. Previews still work.',
@@ -163,9 +186,7 @@ export async function applyChange({ ticketId, requireTier1 = false, deps }) {
   }
   const ticket = deps.store.peek(ticketId);
   const p = ticket.payload;
-  if (requireTier1 && p.tier !== 1) {
-    throw new Error('This ticket is not low-risk (Tier 2). It must be applied with asc_apply_change so the owner is asked first.');
-  }
+  checkApplyTool(p, { requireTier1, sensitiveTool });
 
   // Multi-step plans and screenshot uploads carry their own execution logic.
   if (p.kind === 'plan') {
@@ -173,6 +194,7 @@ export async function applyChange({ ticketId, requireTier1 = false, deps }) {
     return applyPlanPayload({ payload: p, deps });
   }
   if (p.kind === 'screenshots') {
+    if (!currentFeatures().listing) throw new Error('The "listing" feature was switched off since the preview, so this upload is refused.');
     deps.store.markUsed(ticketId);
     return deps.runScreenshots(p);
   }
@@ -180,7 +202,7 @@ export async function applyChange({ ticketId, requireTier1 = false, deps }) {
   // Re-check the tier right now: state may have changed since the preview (e.g. version went into review).
   const verdict = await classify(p.op, p.filledPath, deps.get);
   if (verdict.tier === 3) throw new Error(`Blocked: ${verdict.reason}`);
-  if (verdict.tier > p.tier) {
+  if (verdict.tier > p.tier || Boolean(verdict.sensitive) !== Boolean(p.sensitive)) {
     throw new Error(`The situation changed since the preview (${verdict.reason}). Prepare the change again.`);
   }
 

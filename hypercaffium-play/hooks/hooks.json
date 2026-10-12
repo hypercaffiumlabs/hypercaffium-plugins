@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/server/dist/session-check.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -189,7 +189,7 @@ test('server: every tool is read-only, full-coverage tools exist, unconfigured u
     for (const n of ['play_search_api', 'play_describe_method', 'play_call', 'play_release_status', 'play_audit_log']) {
       assert.ok(names.includes(n), `missing tool ${n}`);
     }
-    const APPLY = new Set(['play_apply_change', 'play_apply_safe_change']);
+    const APPLY = new Set(['play_apply_change', 'play_apply_safe_change', 'play_apply_sensitive_change', 'play_save_settings']);
     for (const t of tools) {
       if (APPLY.has(t.name)) assert.equal(t.annotations?.readOnlyHint, false, `${t.name} changes data and must say so`);
       else assert.equal(t.annotations?.readOnlyHint, true, `${t.name} must be marked read-only`);

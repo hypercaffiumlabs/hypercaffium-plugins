@@ -64,6 +64,7 @@ export async function preparePlan({ title, steps, deps }) {
   const resolvedSteps = [];
   const previews = [];
   let worst = 1;
+  let sensitive = false;
   for (const [i, s] of steps.entries()) {
     const op = s.operationId ? getOperation(s.operationId) : findOperation(s.method, s.path);
     if (!op) throw new Error(`Step ${i}: no such API operation (${s.operationId || `${s.method} ${s.path}`}).`);
@@ -86,13 +87,14 @@ export async function preparePlan({ title, steps, deps }) {
     const placeholders = hasPlaceholder(s.pathParams) || hasPlaceholder(s.body);
     let verdict;
     if (placeholders) {
-      verdict = { tier: Math.max(2, early.tier), reason: 'depends on an earlier step in this plan' };
+      verdict = { tier: Math.max(2, early.tier), sensitive: early.sensitive, feature: early.feature, reason: 'depends on an earlier step in this plan' };
     } else {
       const filled = stepPath(op, s.pathParams, []);
       verdict = await classify(op, filled, deps.get);
     }
     if (verdict.tier === 3) return { allowed: false, tier: 3, blocked: true, reason: `Step ${i}: ${verdict.reason}` };
     worst = Math.max(worst, verdict.tier);
+    sensitive ||= Boolean(verdict.sensitive);
     resolvedSteps.push({ op, pathParams: s.pathParams || {}, query: s.query || {}, body: s.body, tier: verdict.tier, label: s.label || op.operationId });
     previews.push({
       step: i,
@@ -104,7 +106,7 @@ export async function preparePlan({ title, steps, deps }) {
     });
   }
 
-  const ticket = deps.store.create({ kind: 'plan', title, steps: resolvedSteps, tier: worst });
+  const ticket = deps.store.create({ kind: 'plan', title, steps: resolvedSteps, tier: worst, sensitive });
   return {
     allowed: true,
     kind: 'plan',
@@ -115,8 +117,10 @@ export async function preparePlan({ title, steps, deps }) {
     stepCount: previews.length,
     steps: previews,
     note: 'Steps run in order. If one fails the plan stops, and the result lists exactly what was done and what was not.',
-    nextStep:
-      worst === 1
+    sensitive: sensitive || undefined,
+    nextStep: sensitive
+      ? 'This plan contains a CRITICAL change. Show it to the owner in plain English, say plainly what could go wrong, and wait for their explicit "yes". Then apply with asc_apply_sensitive_change.'
+      : worst === 1
         ? 'Low risk. Apply with asc_apply_safe_change (or asc_apply_change).'
         : 'Show this plan to the owner in plain English and wait for their explicit "yes", then apply with asc_apply_change.',
   };
@@ -138,6 +142,7 @@ export async function applyPlanPayload({ payload, deps }) {
       const verdict = await classify(s.op, filled, deps.get);
       if (verdict.tier === 3) throw new Error(`Blocked: ${verdict.reason}`);
       if (verdict.tier > s.tier) throw new Error(`The situation changed since the preview (${verdict.reason}).`);
+      if (verdict.sensitive && !payload.sensitive) throw new Error('This step became a critical change since the preview. Prepare the plan again.');
       const body = s.body === undefined ? undefined : resolveValue(s.body, results);
       const response = await deps.send(s.op.method, filled, resolveValue(s.query, results), body);
       results[i] = simplifyData(response);

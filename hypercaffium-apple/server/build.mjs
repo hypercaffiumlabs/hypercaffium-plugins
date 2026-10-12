@@ -3,7 +3,12 @@ import { build } from 'esbuild';
 import fs from 'node:fs';
 
 fs.rmSync('dist', { recursive: true, force: true });
-for (const [entry, outfile] of [['index.js', 'dist/server.mjs'], ['watch.js', 'dist/watch.mjs']]) {
+for (const [entry, outfile] of [
+  ['index.js', 'dist/server.mjs'],
+  ['watch.js', 'dist/watch.mjs'],
+  ['setup.js', 'dist/setup.mjs'],
+  ['session-check.js', 'dist/session-check.mjs'],
+]) {
   await build({
     entryPoints: [entry],
     outfile,

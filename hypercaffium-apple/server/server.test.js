@@ -152,7 +152,7 @@ test('server: every tool is read-only, full-coverage tools exist, and unconfigur
     for (const n of ['asc_search_api', 'asc_describe_operation', 'asc_call', 'asc_release_status', 'asc_audit_log']) {
       assert.ok(names.includes(n), `missing tool ${n}`);
     }
-    const APPLY = new Set(['asc_apply_change', 'asc_apply_safe_change']);
+    const APPLY = new Set(['asc_apply_change', 'asc_apply_safe_change', 'asc_apply_sensitive_change', 'asc_save_settings']);
     for (const t of tools) {
       if (APPLY.has(t.name)) assert.equal(t.annotations?.readOnlyHint, false, `${t.name} changes data and must say so`);
       else assert.equal(t.annotations?.readOnlyHint, true, `${t.name} must be marked read-only`);

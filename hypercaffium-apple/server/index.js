@@ -3,6 +3,7 @@
 // Reads are plain HTTP GETs. Changes only happen through a two-step flow: asc_prepare_change
 // (preview + one-time ticket) then asc_apply_change / asc_apply_safe_change (executes exactly
 // that ticket), and only when the kill switch ("writesEnabled") is on. Everything is audited.
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -13,6 +14,8 @@ import { fillPath, getOperation, loadSpec, searchOperations } from './spec.js';
 import { buildAppleStatus } from './status.js';
 import { limitText, toLocalTime } from './util.js';
 import { applyChange, prepareChange, TicketStore } from './writes.js';
+import { currentFeatures, setFeatureSource } from './rules.js';
+import { describeFeatures, isCritical, saveSettings } from '../../shared/features.js';
 import { appleCheckChanges } from './monitor.js';
 import { preparePlan } from './plans.js';
 import {
@@ -53,6 +56,17 @@ const PLUGIN = 'app-store-connect';
   const tz = loadConfig().timezone;
   if (tz && !process.env.HYPERCAFFIUM_TIMEZONE) process.env.HYPERCAFFIUM_TIMEZONE = tz;
 }
+
+// Feature switches are re-read from the settings file on every check, so switching one OFF takes
+// effect at once. Which dedicated tools exist is decided here, at startup (a restart shows new ones).
+setFeatureSource(() => loadConfig().features);
+const STARTUP_FEATURES = currentFeatures();
+
+// The terminal setup menu sits next to this server file once built (server/dist/setup.mjs).
+const SETUP_SCRIPT = (() => {
+  const here = fileURLToPath(import.meta.url);
+  return /[\\/]dist[\\/][^\\/]+$/.test(here) ? fileURLToPath(new URL('./setup.mjs', import.meta.url)) : fileURLToPath(new URL('./dist/setup.mjs', import.meta.url));
+})();
 
 // The ONLY function in this server that can change anything. It is referenced solely by the
 // apply path (writeDeps.send below), after a valid, unexpired, single-use ticket has been checked.
@@ -104,7 +118,7 @@ const ok = (value) => ({ content: [{ type: 'text', text: limitText(JSON.stringif
 const fail = (err) => ({ isError: true, content: [{ type: 'text', text: String(err.message || err) }] });
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 
-const server = new McpServer({ name: 'hypercaffium-apple', version: '0.7.1' });
+const server = new McpServer({ name: 'hypercaffium-apple', version: '0.9.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -119,6 +133,11 @@ function readTool(name, description, inputSchema, handler) {
       return fail(err);
     }
   });
+}
+
+// A dedicated change tool exists only while its feature is switched on (decided at startup).
+function featureTool(feature, ...args) {
+  if (STARTUP_FEATURES[feature]) readTool(...args);
 }
 
 // ---- setup + dedicated read tools -----------------------------------------
@@ -137,6 +156,8 @@ readTool(
       apiAccepted: true,
       appsVisible: body.meta?.paging?.total ?? 'unknown',
       writesEnabled: cfg.writesEnabled,
+      featuresChosen: cfg.configured,
+      featuresNote: cfg.configured ? 'See asc_settings for the feature switches.' : 'Feature switches are at their defaults. The owner can choose them with /hypercaffium-apple:setup.',
       writesNote: cfg.writesEnabled
         ? 'Writes are ON: changes need asc_prepare_change then asc_apply_change.'
         : 'Writes are OFF (kill switch). Previews still work. Set "writesEnabled": true in the config file to allow changes.',
@@ -344,14 +365,14 @@ readTool(
   },
 );
 
-function registerApply(name, description, requireTier1, annotations) {
+function registerApply(name, description, requireTier1, annotations, sensitiveTool = false) {
   server.registerTool(
     name,
     { description, inputSchema: { ticket: z.string().describe('The ticket from asc_prepare_change') }, annotations },
     async ({ ticket }) => {
       const started = Date.now();
       try {
-        const out = await applyChange({ ticketId: ticket, requireTier1, deps: writeDeps });
+        const out = await applyChange({ ticketId: ticket, requireTier1, sensitiveTool, deps: writeDeps });
         audit(PLUGIN, {
           tool: name,
           kind: 'write',
@@ -363,6 +384,7 @@ function registerApply(name, description, requireTier1, annotations) {
           stepsDone: out.completed?.length ?? out.results?.length,
           partialFailure: out.applied === false ? true : undefined,
           tier: out.tier,
+          sensitive: sensitiveTool || undefined,
           beforeJson: JSON.stringify(out.before ?? null).slice(0, 4000),
           afterJson: JSON.stringify(out.result ?? null).slice(0, 4000),
         });
@@ -389,6 +411,70 @@ registerApply(
   { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
 );
 
+registerApply(
+  'asc_apply_sensitive_change',
+  'Applies ONLY critical changes (users and permissions, signing assets), and only ones previewed by a prepare tool that said to use this tool. It is separate from asc_apply_change so that allowing that tool can never cover a critical change. Only call this after the owner has read the preview and explicitly said yes.',
+  false,
+  { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  true,
+);
+
+// ---- settings (the in-chat part of /hypercaffium-apple:setup) ----------------------
+
+function settingsView() {
+  const cfg = loadConfig();
+  return {
+    settingsFile: CONFIG_PATH,
+    configured: cfg.configured,
+    credentialsProblems: configProblems(cfg),
+    writesEnabled: cfg.writesEnabled,
+    features: describeFeatures(currentFeatures(), 'apple'),
+    toolsLoadedFor: Object.keys(STARTUP_FEATURES).filter((k) => STARTUP_FEATURES[k]),
+    criticalSettings: `Critical features can only be switched ON in the terminal menu. Open a terminal window (not this chat) and run: node "${SETUP_SCRIPT}"`,
+    restartNote: 'After changing features, restart Claude Code so the dedicated tools match. Switching a feature off takes effect immediately either way.',
+  };
+}
+
+readTool(
+  'asc_settings',
+  "Show this plugin's settings: whether credentials are set up, the writes master switch, and every feature switch grouped by risk level (low, medium, high, critical) with what it covers. Read-only.",
+  {},
+  async () => settingsView(),
+);
+
+server.registerTool(
+  'asc_save_settings',
+  {
+    description:
+      "Save this plugin's settings file (used by /hypercaffium-apple:setup). Only change what the owner chose in this conversation. Critical features (users, signing) can be switched OFF here but never ON: that needs the terminal menu. Writes the JSON file safely (paths are escaped for you).",
+    inputSchema: {
+      keyId: z.string().regex(/^[A-Z0-9]{10}$/).optional().describe('10-character Key ID'),
+      issuerId: z.string().uuid().optional().describe('Issuer ID (a UUID)'),
+      keyPath: z.string().optional().describe('Full path to the AuthKey_XXXXXXXXXX.p8 file'),
+      timezone: z.string().optional().describe('IANA time zone such as America/New_York'),
+      writesEnabled: z.boolean().optional().describe('Master switch for all changes'),
+      features: z.record(z.string(), z.boolean()).optional().describe('Feature switches to change, e.g. {"uploads": false}'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  },
+  async (args) => {
+    try {
+      if (args.keyPath && !/\.p8$/i.test(args.keyPath)) throw new Error('keyPath must point to the .p8 key file.');
+      if (args.timezone) new Intl.DateTimeFormat('en-US', { timeZone: args.timezone });
+      const turnedOnCritical = Object.entries(args.features || {}).filter(([k, v]) => v && isCritical(k) && !currentFeatures()[k]);
+      if (turnedOnCritical.length) {
+        throw new Error(`${turnedOnCritical.map(([k]) => k).join(', ')} can only be switched on in the terminal menu: open a terminal window and run node "${SETUP_SCRIPT}"`);
+      }
+      saveSettings(CONFIG_PATH, args, 'apple');
+      audit(PLUGIN, { tool: 'asc_save_settings', kind: 'settings', ok: true, changed: Object.keys(args) });
+      return ok({ saved: true, ...settingsView() });
+    } catch (err) {
+      audit(PLUGIN, { tool: 'asc_save_settings', kind: 'settings', ok: false, error: String(err.message || err) });
+      return fail(err);
+    }
+  },
+);
+
 // ---- release workflows (previews + tickets; nothing changes until an apply tool runs) ----
 
 const appId = z.string().optional().describe('Numeric App Store Connect app ID (optional if the account has one app)');
@@ -401,7 +487,7 @@ readTool(
   (a) => releaseOverview(writeDeps, a),
 );
 
-readTool(
+featureTool('listing',
   'asc_edit_listing',
   'Prepare an edit to a draft version\'s App Store text for one locale: description, keywords, whatsNew (release notes), promotionalText, marketingUrl, supportUrl. Returns a preview with before/after and a ticket. Tier 1 on a draft. Creates the locale if it does not exist.',
   {
@@ -418,21 +504,21 @@ readTool(
   ({ appId: a, version, locale, ...fields }) => prepareListingEdit(writeDeps, { appId: a, version, locale, fields }),
 );
 
-readTool(
+featureTool('listing',
   'asc_set_release_notes',
   'Prepare saving the release notes ("What\'s New") for a draft version in one locale. Shows the old and new text and returns a ticket (Tier 1 on a draft).',
   { appId, version: versionArg, locale: z.string().default('en-US'), whatsNew: z.string().describe('The release notes text') },
   ({ appId: a, version, locale, whatsNew }) => prepareListingEdit(writeDeps, { appId: a, version, locale, fields: { whatsNew } }),
 );
 
-readTool(
+featureTool('releases',
   'asc_attach_build',
   'Prepare choosing which processed build a draft version will ship (the build EAS uploaded). Checks the build exists, is VALID and not expired. Tier 1 on a draft.',
   { appId, version: versionArg, buildNumber: z.string().describe('Build number, e.g. "57"') },
   (a) => prepareAttachBuild(writeDeps, a),
 );
 
-readTool(
+featureTool('releases',
   'asc_create_version',
   'Prepare creating a new draft App Store version (e.g. 1.1.4). Refuses if that version exists or another draft is already open. Tier 1 (a draft is invisible to users).',
   {
@@ -443,35 +529,35 @@ readTool(
   (a) => prepareCreateVersion(writeDeps, a),
 );
 
-readTool(
+featureTool('releases',
   'asc_submit_for_review',
   'Prepare submitting a draft version to App Review. Runs the pre-flight checklist first and returns the problems (with NO ticket) if anything blocks it. Otherwise returns a 3-step plan and a ticket (Tier 2). States plainly whether the version will release automatically after approval.',
   { appId, version: versionArg },
   (a) => prepareSubmit(writeDeps, a),
 );
 
-readTool(
+featureTool('releases',
   'asc_cancel_submission',
   'Prepare cancelling the open App Review submission (pulls the version back to editable). Tier 2.',
   { appId },
   (a) => prepareCancelSubmission(writeDeps, a),
 );
 
-readTool(
+featureTool('releases',
   'asc_phased_release',
   'Prepare a phased-release action for a version: enable (before release), pause, resume, or complete (release to everyone now). Tier 2.',
   { appId, version: versionArg, action: z.enum(['enable', 'pause', 'resume', 'complete']) },
   (a) => preparePhasedRelease(writeDeps, a),
 );
 
-readTool(
+featureTool('releases',
   'asc_release_version',
   'Prepare releasing an APPROVED version that is waiting for you (PENDING_DEVELOPER_RELEASE) to the App Store. Tier 2.',
   { appId, version: versionArg },
   (a) => prepareReleaseNow(writeDeps, a),
 );
 
-readTool(
+featureTool('listing',
   'asc_upload_screenshots',
   'Prepare uploading PNG/JPEG screenshots from local files to a DRAFT version for one locale and display type (e.g. APP_IPHONE_67). Adds only; never deletes. Returns a ticket (Tier 1). Applying uploads the files and waits for Apple to process them.',
   {
@@ -484,7 +570,7 @@ readTool(
   (a) => prepareScreenshots(writeDeps, a),
 );
 
-readTool(
+featureTool('listing',
   'asc_clear_screenshots',
   "Prepare REMOVING screenshots of one display type and locale from a DRAFT version (so new ones can be uploaded). This is the only delete the plugin allows, and only for a draft. Tier 2: needs the owner's explicit yes. keepFirst keeps that many from the start of the set.",
   {
@@ -522,7 +608,7 @@ readTool(
   (a) => findPricePoint(writeDeps, a),
 );
 
-readTool(
+featureTool('pricing',
   'asc_set_subscription_price',
   'Prepare a subscription price change. Previews every territory old-to-new with currency and percentage, and whether existing subscribers keep their price. Tier 2 ALWAYS; never automatic. allTerritories sets Apple\'s equalized price in every territory.',
   {
@@ -537,7 +623,7 @@ readTool(
   (a) => prepareSetPrice(writeDeps, a),
 );
 
-readTool(
+featureTool('pricing',
   'asc_edit_subscription',
   'Prepare editing a subscription\'s name, review note, family sharing or group level. Tier 2.',
   {
@@ -550,14 +636,14 @@ readTool(
   ({ subscriptionId: id, ...fields }) => prepareEditSubscription(writeDeps, { subscriptionId: id, fields }),
 );
 
-readTool(
+featureTool('pricing',
   'asc_edit_subscription_localization',
   'Prepare editing (or creating) a subscription\'s display name and description for one locale. Name 2-30 characters, description up to 45. Tier 2.',
   { subscriptionId, locale: z.string(), name: z.string().optional(), description: z.string().optional() },
   (a) => prepareEditSubscriptionLocalization(writeDeps, a),
 );
 
-readTool(
+featureTool('pricing',
   'asc_create_intro_offer',
   'Prepare an introductory offer (free trial, pay-as-you-go, or pay-up-front) on a subscription. Tier 2. For promotional offers, offer codes and win-back offers use asc_search_api + asc_prepare_change.',
   {
@@ -586,14 +672,14 @@ readTool(
   (a) => reviewInbox(writeDeps, a),
 );
 
-readTool(
+featureTool('reviews',
   "asc_reply_to_review",
   "Prepare a PUBLIC reply to an App Store review (visible to everyone). Shows the review, any existing reply that would be replaced, and returns a ticket (Tier 2, needs the owner's explicit yes).",
   { reviewId: z.string().describe("Review id from asc_review_inbox"), text: z.string().describe("The reply, 5970 characters max") },
   (a) => prepareReplyToReview(writeDeps, a),
 );
 
-readTool(
+featureTool('listing',
   "asc_edit_review_details",
   "Prepare editing the App Review details of a draft version: contact name, phone, email, whether a demo account is required and its login, and notes for the reviewer. The demo password is never shown in previews or the audit log. Tier 1 on a draft.",
   {
@@ -611,7 +697,7 @@ readTool(
   ({ appId: a, version, ...fields }) => prepareReviewDetails(writeDeps, { appId: a, version, fields }),
 );
 
-readTool(
+featureTool('listing',
   "asc_edit_app_info",
   "Prepare editing the app name, subtitle, privacy policy URL, privacy choices URL or privacy policy text for one locale. Only possible while a version is being prepared. Name and subtitle become public on release, so this is Tier 2.",
   {
@@ -633,14 +719,14 @@ readTool(
   (a) => testflightOverview(writeDeps, a),
 );
 
-readTool(
+featureTool('testing',
   "asc_testflight_set_notes",
   "Prepare the TestFlight What to test notes for a build and locale (creates them if missing). Tier 1: testers only, easy to edit back.",
   { appId, buildNumber: z.string().describe("Build number, e.g. 57"), locale: z.string().default("en-US"), whatsNew: z.string() },
   (a) => prepareTestflightNotes(writeDeps, a),
 );
 
-readTool(
+featureTool('testing',
   "asc_testflight_add_tester",
   "Prepare adding a tester to a TestFlight group (external groups: Apple emails an invitation). Reuses the person if they already exist. Tier 2.",
   {
@@ -653,7 +739,7 @@ readTool(
   (a) => prepareAddTester(writeDeps, a),
 );
 
-readTool(
+featureTool('testing',
   "asc_testflight_add_build_to_group",
   "Prepare making a processed build available to a TestFlight group. External groups need Apple's beta review for a new build. Tier 2.",
   { appId, buildNumber: z.string(), group: z.string().describe("TestFlight group name or id") },

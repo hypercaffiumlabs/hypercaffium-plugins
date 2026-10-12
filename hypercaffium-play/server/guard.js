@@ -4,6 +4,8 @@
 //   DELETE /androidpublisher/v3/applications/{pkg}/edits/{editId}      (throw that edit away)
 // Everything else, including ":commit", uploads, track updates and review replies, is refused
 // before it leaves this machine. Phase 2b replaces this with a preview-and-confirm gate.
+import { currentFeatures } from './rules.js';
+
 const V3 = '/androidpublisher/v3/';
 const SAFE_PATH = /^\/androidpublisher\/v3\/[A-Za-z0-9_\-/:.%~]+$/;
 const PKG = '[A-Za-z0-9._]+';
@@ -29,16 +31,29 @@ const UPLOAD_IMAGE = new RegExp(
 // depend only on the method-id rules in rules.js.
 const PURCHASE_ACTIONS = /(:(refund|revoke|cancel|defer|consume|acknowledge))|\/(orders|purchases|externalTransactions|voidedpurchases)(\/|:|$)/i;
 
-export function assertWriteAllowed(method, pathname) {
+// App signing key enrollment and rotation (rotation cannot be undone).
+const SIGNING = /\/appSigning(:|\/|$)/i;
+// Developer-account users and their per-app grants live outside /applications/.
+const DEV_USERS = new RegExp(`^${V3}developers/[0-9]+/users(/[^/]+(/grants(/[^/]+)?)?)?$`);
+
+// Critical areas are refused here unless their feature is switched on, so the block does not depend
+// only on the method-id rules in rules.js.
+export function assertWriteAllowed(method, pathname, features = currentFeatures()) {
   if (pathname.split('/').some((seg) => seg === '.' || seg === '..' || /^%2e(%2e)?$/i.test(seg))) {
     throw new Error(`Blocked by safety guard: ${method} ${pathname} contains a dot-segment.`);
   }
-  if (PURCHASE_ACTIONS.test(pathname)) {
-    throw new Error(`Blocked by safety guard: ${method} ${pathname} acts on customer purchases or orders.`);
+  if (PURCHASE_ACTIONS.test(pathname) && !features.refunds) {
+    throw new Error(`Blocked by safety guard: ${method} ${pathname} acts on customer purchases or orders (the "refunds" feature is off).`);
+  }
+  if (SIGNING.test(pathname) && !features.signing) {
+    throw new Error(`Blocked by safety guard: ${method} ${pathname} changes app signing (the "signing" feature is off).`);
   }
   let allowed = false;
   if (method === 'POST' && (CREATE_EDIT.test(pathname) || COMMIT.test(pathname) || UPLOAD_IMAGE.test(pathname))) allowed = true;
-  else if (['POST', 'PUT', 'PATCH'].includes(method)) allowed = APP_PATH.test(pathname) && !/\/users(\/|$)|\/grants(\/|$)/.test(pathname);
+  else if (['POST', 'PUT', 'PATCH'].includes(method)) {
+    allowed =
+      (APP_PATH.test(pathname) && !/\/users(\/|$)|\/grants(\/|$)/.test(pathname)) || (Boolean(features.users) && DEV_USERS.test(pathname));
+  }
   else if (method === 'DELETE') allowed = DELETE_EDIT.test(pathname); // only to discard an edit
   if (!allowed) throw new Error(`Blocked by safety guard: ${method} ${pathname} is not an allowed change.`);
 }

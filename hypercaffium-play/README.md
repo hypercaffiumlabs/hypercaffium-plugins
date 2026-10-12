@@ -23,7 +23,7 @@ See [COVERAGE.md](COVERAGE.md) for what the API does and does not cover (for exa
 ## How changes stay safe
 
 1. **Prepare, then apply.** A change tool returns an exact preview and a one-time ticket; applying runs exactly that ticket once. Edit-based changes are committed together or not at all.
-2. **Tiers, enforced by the server:** everything that changes your app needs your explicit approval; deletes, users, permission grants and purchase refunds are blocked.
+2. **Tiers, enforced by the server:** everything that changes your app needs your explicit approval; deletes are blocked, and so is any area switched off in your access settings (users, app signing and refunds start off).
 3. **Kill switch.** Writes are **off by default** (`"writesEnabled": true` turns them on).
 4. **Audit log.** Every change is recorded with before and after values.
 5. **One open edit at a time.** Google keeps a single open edit per app, so the plugin never opens two at once.
@@ -31,6 +31,7 @@ See [COVERAGE.md](COVERAGE.md) for what the API does and does not cover (for exa
 ## Security model and its limits
 
 - **What stops a bad change:** the server classifies every change into a tier and refuses blocked ones before anything is sent. This is code, not just instructions to the AI.
+- **Settings:** the settings file is yours. Claude could edit it like any file, so the terminal-only rule for critical areas is a strong lock against mistakes, not against someone who controls your computer.
 - **What a "yes" really is:** the plugin cannot see who is approving. A Tier 2 change runs when the apply tool is called with a valid ticket, so the human gate is **Claude Code's own permission prompt** for that tool. Do not add `*_apply_change` to your always-allow list. It is safe to always-allow only `*_apply_safe_change`, which refuses anything above Tier 1.
 - **Local trust:** anything that can run code as you can already read your key file and call Apple's or Google's API directly. The plugin does not defend against a compromised computer. Keep the key file readable only by you.
 - **Least privilege:** give the key or service account only the roles you need (App Manager, not Admin; the Play permissions in the table above). Revoke it in the store console if you stop using the plugin.
@@ -60,7 +61,30 @@ If you publish on both stores, the first command adds the Hypercaffium catalog a
 
 `glue` only adds commands that report on both stores at once. If you publish on one store only, skip it.
 
+## Access settings
+
+Run **`/hypercaffium-play:setup`** after installing. It connects your account (no hand-edited JSON) and shows a menu of what the plugin may change, grouped by risk:
+
+| Risk | Areas | Default |
+|---|---|---|
+| Low | Testing tracks and testers | On |
+| Medium | Store listing, review replies | On |
+| High | Releases, prices and offers, uploading app files, everything else in the API | On |
+| Critical | Users and permissions, app signing key, refunds and orders | **Off** |
+
+Switched-off areas are refused by the server for every route, not just hidden. Switching something off takes effect at once; restart Claude Code after changes so the dedicated tools match.
+
+**Critical areas can only be switched on in a terminal menu**, which needs a real keyboard, so Claude cannot switch them on for you. Open a terminal window yourself and run:
+
+```
+node "<plugin folder>/server/dist/setup.mjs"
+```
+
+(`/hypercaffium-play:setup` prints the exact path.) Critical changes are applied through a separate approval tool, `play_apply_sensitive_change`, so allowing `play_apply_change` can never cover them.
+
 ## Set up
+
+The easiest way is **`/hypercaffium-play:setup`**, which asks for these details and writes the settings file for you. To do it by hand:
 
 1. In Google Cloud: **APIs & Services > Library**, enable **Google Play Android Developer API**.
 2. **IAM & Admin > Service Accounts**: create a service account (no Google Cloud roles needed), then **Keys > Add key > JSON**.

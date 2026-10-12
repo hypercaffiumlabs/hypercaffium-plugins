@@ -1,7 +1,7 @@
 ---
 name: play-safety-rules
 description: Use when working with Google Play Console, the Play Store, Android release tracks, staged rollouts, app bundles, store listing text and images, review replies, or subscriptions. Explains the play_ tools and the mandatory prepare-then-apply protocol for any change.
-version: 0.7.1
+version: 0.9.0
 ---
 
 # Google Play Console: how to use these tools safely
@@ -55,7 +55,15 @@ Clearing a release note: send `text: ""` for that language (leaving notes out ke
 
 - **Tier 1:** none. Nearly everything on Google Play goes live on commit, so everything needs the owner's "yes".
 - **Tier 2 (preview, then the owner's "yes"):** all changes: listings, tracks and rollouts, details, public review replies.
-- **Tier 3 (blocked, no ticket):** every delete, users and permission grants, direct edit control (commit/delete/insert/validate), refunds and other actions on customer purchases.
+- **Tier 3 (blocked, no ticket):** every delete, direct edit control (commit/delete/insert/validate), and every area whose feature switch is off (users, app signing and refunds are off unless the owner switched them on).
+
+### Feature switches (enforced by the server)
+
+The owner chooses which areas this plugin may change, grouped by risk: Low (testing), Medium (listing, review replies), High (releases, prices, uploading app files, everything else in the API) and Critical (users and permissions, app signing, refunds and orders). A switched-off area is refused for every route, including `play_prepare_change`. `play_settings` shows the current switches.
+
+- If a change is refused because its feature is off, tell the owner which switch it is and that `/hypercaffium-play:setup` changes it. Do not look for another way.
+- **Critical** changes are previewed like any other, but can only be applied with `play_apply_sensitive_change`. Before applying, say plainly what could go wrong (app signing key rotation cannot be undone; a refund sends a customer's money back).
+- Never switch a feature on, never call `play_save_settings` unless the owner is choosing settings right now, and never edit the settings file directly. Critical features can only be switched on by the owner in a terminal menu; `play_save_settings` refuses it.
 
 ### The kill switch
 

@@ -5,6 +5,58 @@
 //   Tier 1  AUTO      small allowlist of low-risk, non-live edits; may run without a prompt
 //
 // Anything not listed is Tier 2. When in doubt, a rule must fall to a HIGHER tier, never lower.
+//
+// On top of the tiers, every change belongs to a FEATURE (see shared/features.js). A switched-off
+// feature is Tier 3 for every route. Critical features (users, signing) are "sensitive": they can only
+// be applied with asc_apply_sensitive_change, a separate tool with its own permission prompt.
+import { isCritical, resolveFeatures } from '../../shared/features.js';
+
+let featureSource = () => ({});
+// index.js points this at the settings file; tests can point it at anything.
+export function setFeatureSource(fn) {
+  featureSource = fn;
+}
+export const currentFeatures = () => resolveFeatures(featureSource(), 'apple');
+
+const FEATURE_BY_RESOURCE = [
+  ['users', /^(users|userInvitations)$/],
+  ['signing', /^(certificates|profiles|bundleIds|bundleIdCapabilities|devices|merchantIds|passTypeIds)$/],
+  ['uploads', /^(buildUploads|buildUploadFiles)$/],
+  ['testing', /^(beta[A-Z]\w*|buildBetaDetails|buildBetaNotifications|builds)$/],
+  ['reviews', /^customerReviewResponses$/],
+  ['marketing', /^(appCustomProductPage\w*|appEvent\w*|appStoreVersionExperiment\w*|appStoreVersionPromotions|nominations)$/],
+  ['pricing', /^(subscription\w*|inAppPurchase\w*|appPrice\w*|winBackOffers|promotedPurchases)$/],
+  [
+    'listing',
+    /^(appStoreVersionLocalizations|appInfoLocalizations|appInfos|appScreenshots|appScreenshotSets|appPreviews|appPreviewSets|appStoreReviewDetails|appStoreReviewAttachments|ageRatingDeclarations|endUserLicenseAgreements|routingAppCoverages|accessibilityDeclarations|appTags)$/,
+  ],
+  [
+    'releases',
+    /^(apps|appStoreVersions|reviewSubmissions|reviewSubmissionItems|appStoreVersionSubmissions|appStoreVersionPhasedReleases|appStoreVersionReleaseRequests|appEncryptionDeclarations\w*|appAvailabilities|territoryAvailabilities|endAppAvailabilityPreOrders)$/,
+  ],
+];
+
+// Which feature a change belongs to, from its path (/v1/<resource>/...). Unknown areas are "advanced".
+export function featureFor(path) {
+  const [, , resource = '', , rel = '', related = ''] = path.split('?')[0].split('/');
+  // A relationship edit belongs to what is being linked, e.g. /v1/betaGroups/{id}/relationships/builds
+  // is TestFlight, /v1/appStoreVersions/{id}/relationships/build is a release.
+  if (rel === 'relationships' && /^beta/.test(related)) return 'testing';
+  for (const [feature, re] of FEATURE_BY_RESOURCE) if (re.test(resource)) return feature;
+  return 'advanced';
+}
+
+function featureVerdict(path) {
+  const feature = featureFor(path);
+  if (!currentFeatures()[feature]) {
+    return {
+      tier: 3,
+      feature,
+      reason: `The "${feature}" feature is switched off in your settings, so this change is refused. Run /hypercaffium-apple:setup to see or change your settings.`,
+    };
+  }
+  return { feature, sensitive: isCritical(feature) };
+}
 
 // Version states in which the listing is still a private draft (not live, not in review).
 export const EDITABLE_VERSION_STATES = new Set([
@@ -21,8 +73,8 @@ const BLOCKED = [
     reason: 'Deleting is blocked. Nothing in this plugin removes data from App Store Connect.',
   },
   {
-    test: (_op, path) => /^\/v\d\/(users|userInvitations|apiKeys|certificates|profiles|devices|bundleIds|merchantIds|passTypeIds)(\/|$)/.test(path),
-    reason: 'Users, access, API keys and code-signing are never changed by this plugin.',
+    test: (_op, path) => /^\/v\d\/apiKeys(\/|$)/.test(path),
+    reason: 'API keys are never changed by this plugin.',
   },
 ];
 
@@ -97,6 +149,16 @@ async function classifyScreenshotDelete(id, lookup, early) {
 // lookup(path) -> parsed JSON of a GET, or throws. Any failure falls back to the safer tier.
 // opts.early: classify from the operation alone (no real ids yet), used to reject blocked things fast.
 export async function classify(op, filledPath, lookup, opts = {}) {
+  const fv = featureVerdict(filledPath);
+  if (fv.tier === 3) return fv;
+  const verdict = await classifyTier(op, filledPath, lookup, opts);
+  if (verdict.tier === 3) return { ...verdict, feature: fv.feature };
+  // A sensitive change is never automatic.
+  if (fv.sensitive) return { tier: 2, feature: fv.feature, sensitive: true, reason: `${verdict.reason} (critical: ${fv.feature})` };
+  return { ...verdict, feature: fv.feature };
+}
+
+async function classifyTier(op, filledPath, lookup, opts) {
   if (op.method === 'DELETE') {
     const m = SCREENSHOT_DELETE.exec(filledPath);
     if (m) return classifyScreenshotDelete(decodeURIComponent(m[1]), lookup, Boolean(opts.early));
@@ -131,5 +193,9 @@ function tier2Reason(op, path) {
   if (path.startsWith('/v1/appStoreVersionReleaseRequests') || path.includes('PhasedRelease')) return 'this releases or rolls out a version to real users';
   if (/subscription|inAppPurchase|appPrice|winBackOffer|offerCode|promotedPurchase/i.test(path)) return 'this affects pricing or what customers pay';
   if (path.startsWith('/v1/appInfoLocalizations')) return 'the app name and subtitle are public on the store once released';
+  if (/^\/v1\/(users|userInvitations)/.test(path)) return 'this changes who can access your App Store Connect account';
+  if (/^\/v1\/(certificates|profiles|bundleIds|bundleIdCapabilities|devices|merchantIds|passTypeIds)/.test(path)) {
+    return 'this changes code-signing assets; it can break builds made by EAS or Xcode';
+  }
   return 'changes to your App Store account need your confirmation';
 }

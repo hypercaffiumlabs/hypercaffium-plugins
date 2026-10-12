@@ -24,7 +24,7 @@ test('every DELETE in the whole API is Tier 3 (blocked)', async () => {
   }
 });
 
-test('users, API keys and code-signing are Tier 3 for every method', async () => {
+test('users and code-signing are Tier 3 for every method while their features are off (the default)', async () => {
   for (const op of ops().filter((o) => /^\/v\d\/(users|userInvitations|certificates|profiles|devices|bundleIds)(\/|$)/.test(o.path))) {
     const v = await classify(op, op.path.replace(/\{[^}]+\}/g, 'x'), lookupState('X'));
     assert.equal(v.tier, 3, `${op.method} ${op.path} must be blocked`);
@@ -185,7 +185,7 @@ test('a blocked operation is reported as blocked even when its parameters are mi
   const user = ops().find((o) => o.method === 'POST' && o.path === '/v1/userInvitations');
   const u = await prepareChange({ op: user, deps: deps() }); // no body on purpose
   assert.equal(u.allowed, false);
-  assert.match(u.reason, /Users, access/);
+  assert.match(u.reason, /switched off/);
 });
 
 test('every lookup path a Tier 1 rule relies on is a real GET in Apple\'s spec', () => {

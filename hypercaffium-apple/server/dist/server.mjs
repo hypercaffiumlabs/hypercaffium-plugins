@@ -3263,8 +3263,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path6) {
-      let input2 = path6;
+    function removeDotSegments(path7) {
+      let input2 = path7;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3673,8 +3673,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path6 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
+        const path7 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path7 && path7 !== "/" ? path7 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -7187,18 +7187,21 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list2, fs6, exportName) {
+    function addFormats(ajv, list2, fs7, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list2)
-        ajv.addFormat(f, fs6[f]);
+        ajv.addFormat(f, fs7[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.default = formatsPlugin;
   }
 });
+
+// index.js
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // node_modules/zod/v3/helpers/util.js
 var util;
@@ -7574,8 +7577,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path6, errorMaps, issueData } = params;
-  const fullPath = [...path6, ...issueData.path || []];
+  const { data, path: path7, errorMaps, issueData } = params;
+  const fullPath = [...path7, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -7690,11 +7693,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path6, key) {
+  constructor(parent, value, path7, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path6;
+    this._path = path7;
     this._key = key;
   }
   get path() {
@@ -11648,10 +11651,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path6) {
-  if (!path6)
+function getElementAtPath(obj, path7) {
+  if (!path7)
     return obj;
-  return path6.reduce((acc, key) => acc?.[key], obj);
+  return path7.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11991,11 +11994,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path6, issues) {
+function prefixIssues(path7, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path6);
+    iss.path.unshift(path7);
     return iss;
   });
 }
@@ -12445,16 +12448,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path6 = []) => {
+  const processError = (error63, path7 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else {
-        const fullpath = [...path6, ...issue2.path];
+        const fullpath = [...path7, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -12493,17 +12496,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path6 = []) => {
+  const processError = (error63, path7 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else {
-        const fullpath = [...path6, ...issue2.path];
+        const fullpath = [...path7, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -12542,8 +12545,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path6 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path6) {
+  const path7 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path7) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -28058,11 +28061,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path6) {
-  if (path6.length === 0) {
+function getDotPath(path7) {
+  if (path7.length === 0) {
     return "object root";
   }
-  return path6.reduce((acc, seg, index) => {
+  return path7.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -30289,13 +30292,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path6 = ref.slice(1).split("/").filter(Boolean);
-  if (path6.length === 0) {
+  const path7 = ref.slice(1).split("/").filter(Boolean);
+  if (path7.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path6[0] === defsKey) {
-    const key = path6[1] === void 0 ? void 0 : decodeJSONPointerSegment(path6[1]);
+  if (path7[0] === defsKey) {
+    const key = path7[1] === void 0 ? void 0 : decodeJSONPointerSegment(path7[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -36609,6 +36612,10 @@ function loadConfig() {
     keyPath: process.env.ASC_KEY_PATH || file2.keyPath || "",
     writesEnabled: rawWrites === true || /^(1|true|yes)$/i.test(String(rawWrites || "")),
     timezone: process.env.HYPERCAFFIUM_TIMEZONE || file2.timezone || "",
+    // Feature switches (see shared/features.js); missing ones fall back to their defaults.
+    features: file2.features && typeof file2.features === "object" ? file2.features : {},
+    // True once the setup menu has saved settings at least once.
+    configured: Boolean(file2.features),
     fileError
   };
 }
@@ -36881,7 +36888,192 @@ function buildAppleStatus({ app, versions = [], builds = [], phased = null }) {
 // writes.js
 import crypto2 from "node:crypto";
 
+// ../../shared/features.js
+import fs4 from "node:fs";
+import path4 from "node:path";
+var RISK_LEVELS = ["low", "medium", "high", "critical"];
+var RISK_LABEL = {
+  low: "Low risk: only testers see it, easy to undo",
+  medium: "Medium risk: public, but easy to change back",
+  high: "High risk: reaches real users or money",
+  critical: "Critical: access, signing or customer money"
+};
+var FEATURES = [
+  {
+    key: "testing",
+    risk: "low",
+    label: { apple: "TestFlight", play: "Testing tracks and testers" },
+    help: {
+      apple: "Notes for testers, adding and removing testers, builds in groups, external beta review, expiring builds.",
+      play: "Who can test your app on the internal, closed and open testing tracks."
+    }
+  },
+  {
+    key: "listing",
+    risk: "medium",
+    label: "Store listing",
+    help: "App name, description, keywords, screenshots, preview videos, App Review details and similar listing content."
+  },
+  {
+    key: "reviews",
+    risk: "medium",
+    label: "Review replies",
+    help: "Public replies to customer reviews."
+  },
+  {
+    key: "marketing",
+    risk: "medium",
+    label: "Marketing pages",
+    stores: ["apple"],
+    // Google's API has no custom store listings or listing experiments.
+    help: "Custom product pages, in-app events and product page tests."
+  },
+  {
+    key: "releases",
+    risk: "high",
+    label: "Releases",
+    help: {
+      apple: "Creating versions, attaching builds, submitting for review, phased release, releasing, availability.",
+      play: "Putting versions on tracks, staged rollouts, halting, promoting, release notes."
+    }
+  },
+  {
+    key: "pricing",
+    risk: "high",
+    label: "Prices and offers",
+    help: "Subscriptions, in-app purchases, prices, moving existing subscribers to a new price, offers and offer codes."
+  },
+  {
+    key: "uploads",
+    risk: "high",
+    label: "Uploading app files",
+    help: {
+      apple: "Uploading a build. Skip this if EAS, Xcode or fastlane uploads your builds.",
+      play: "Uploading an .aab app bundle and its crash-decoding (mapping) file. Skip this if EAS or Gradle uploads for you."
+    }
+  },
+  {
+    key: "advanced",
+    risk: "high",
+    label: "Everything else in the API",
+    help: "Rarely used areas the dedicated tools do not cover (for example Game Center or app recovery). Still previewed and confirmed."
+  },
+  {
+    key: "users",
+    risk: "critical",
+    label: "Users and permissions",
+    help: "Inviting people to your developer account, changing their access, removing them."
+  },
+  {
+    key: "signing",
+    risk: "critical",
+    label: "Signing keys",
+    help: {
+      apple: "Certificates, provisioning profiles, bundle IDs and devices. Changing these can break builds made by EAS or Xcode.",
+      play: "Enrolling in and rotating the app signing key. Rotation cannot be undone."
+    }
+  },
+  {
+    key: "refunds",
+    risk: "critical",
+    label: "Refunds and orders",
+    stores: ["play"],
+    // Apple's API has no refund or order actions; Apple handles refunds itself.
+    help: "Refunding orders and cancelling, revoking or deferring customer subscriptions."
+  }
+];
+var featuresFor = (store) => FEATURES.filter((f) => !f.stores || f.stores.includes(store));
+var pick2 = (value, store) => value && typeof value === "object" ? value[store] : value;
+var isCritical = (key) => FEATURES.some((f) => f.key === key && f.risk === "critical");
+var defaultOn = (key) => !isCritical(key);
+function resolveFeatures(fileFeatures, store) {
+  const out = {};
+  for (const f of featuresFor(store)) {
+    const v = fileFeatures && typeof fileFeatures === "object" ? fileFeatures[f.key] : void 0;
+    out[f.key] = typeof v === "boolean" ? v : defaultOn(f.key);
+  }
+  return out;
+}
+function describeFeatures(features, store) {
+  return RISK_LEVELS.map((risk) => ({
+    risk,
+    riskLabel: RISK_LABEL[risk],
+    features: featuresFor(store).filter((f) => f.risk === risk).map((f) => ({ key: f.key, label: pick2(f.label, store), on: Boolean(features[f.key]), help: pick2(f.help, store) }))
+  })).filter((g) => g.features.length);
+}
+function saveSettings(configPath, changes, store, { allowCriticalOn = false } = {}) {
+  let current = {};
+  try {
+    current = JSON.parse(fs4.readFileSync(configPath, "utf8"));
+  } catch (err) {
+    if (err.code !== "ENOENT") throw new Error(`${configPath} exists but is not valid JSON, so it was not changed: ${err.message}`);
+  }
+  const next = { ...current };
+  const { features, ...rest } = changes;
+  for (const [k, v] of Object.entries(rest)) {
+    if (v !== void 0) next[k] = v;
+  }
+  if (features) {
+    const known = new Set(featuresFor(store).map((f) => f.key));
+    const merged = { ...resolveFeatures(current.features, store) };
+    for (const [k, v] of Object.entries(features)) {
+      if (!known.has(k)) throw new Error(`Unknown feature "${k}". Known: ${[...known].join(", ")}.`);
+      if (typeof v !== "boolean") throw new Error(`Feature "${k}" must be true or false.`);
+      if (v && isCritical(k) && !merged[k] && !allowCriticalOn) {
+        throw new Error(`"${k}" is a critical feature. It can only be switched on in the terminal setup menu, not from the chat.`);
+      }
+      merged[k] = v;
+    }
+    next.features = merged;
+  }
+  fs4.mkdirSync(path4.dirname(configPath), { recursive: true });
+  const tmp = `${configPath}.tmp`;
+  fs4.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}
+`);
+  fs4.renameSync(tmp, configPath);
+  return next;
+}
+
 // rules.js
+var featureSource = () => ({});
+function setFeatureSource(fn) {
+  featureSource = fn;
+}
+var currentFeatures = () => resolveFeatures(featureSource(), "apple");
+var FEATURE_BY_RESOURCE = [
+  ["users", /^(users|userInvitations)$/],
+  ["signing", /^(certificates|profiles|bundleIds|bundleIdCapabilities|devices|merchantIds|passTypeIds)$/],
+  ["uploads", /^(buildUploads|buildUploadFiles)$/],
+  ["testing", /^(beta[A-Z]\w*|buildBetaDetails|buildBetaNotifications|builds)$/],
+  ["reviews", /^customerReviewResponses$/],
+  ["marketing", /^(appCustomProductPage\w*|appEvent\w*|appStoreVersionExperiment\w*|appStoreVersionPromotions|nominations)$/],
+  ["pricing", /^(subscription\w*|inAppPurchase\w*|appPrice\w*|winBackOffers|promotedPurchases)$/],
+  [
+    "listing",
+    /^(appStoreVersionLocalizations|appInfoLocalizations|appInfos|appScreenshots|appScreenshotSets|appPreviews|appPreviewSets|appStoreReviewDetails|appStoreReviewAttachments|ageRatingDeclarations|endUserLicenseAgreements|routingAppCoverages|accessibilityDeclarations|appTags)$/
+  ],
+  [
+    "releases",
+    /^(apps|appStoreVersions|reviewSubmissions|reviewSubmissionItems|appStoreVersionSubmissions|appStoreVersionPhasedReleases|appStoreVersionReleaseRequests|appEncryptionDeclarations\w*|appAvailabilities|territoryAvailabilities|endAppAvailabilityPreOrders)$/
+  ]
+];
+function featureFor(path7) {
+  const [, , resource = "", , rel = "", related = ""] = path7.split("?")[0].split("/");
+  if (rel === "relationships" && /^beta/.test(related)) return "testing";
+  for (const [feature, re] of FEATURE_BY_RESOURCE) if (re.test(resource)) return feature;
+  return "advanced";
+}
+function featureVerdict(path7) {
+  const feature = featureFor(path7);
+  if (!currentFeatures()[feature]) {
+    return {
+      tier: 3,
+      feature,
+      reason: `The "${feature}" feature is switched off in your settings, so this change is refused. Run /hypercaffium-apple:setup to see or change your settings.`
+    };
+  }
+  return { feature, sensitive: isCritical(feature) };
+}
 var EDITABLE_VERSION_STATES = /* @__PURE__ */ new Set([
   "PREPARE_FOR_SUBMISSION",
   "DEVELOPER_REJECTED",
@@ -36895,8 +37087,8 @@ var BLOCKED = [
     reason: "Deleting is blocked. Nothing in this plugin removes data from App Store Connect."
   },
   {
-    test: (_op, path6) => /^\/v\d\/(users|userInvitations|apiKeys|certificates|profiles|devices|bundleIds|merchantIds|passTypeIds)(\/|$)/.test(path6),
-    reason: "Users, access, API keys and code-signing are never changed by this plugin."
+    test: (_op, path7) => /^\/v\d\/apiKeys(\/|$)/.test(path7),
+    reason: "API keys are never changed by this plugin."
   }
 ];
 var TIER1_STATIC = [
@@ -36957,6 +37149,14 @@ async function classifyScreenshotDelete(id, lookup2, early) {
   }
 }
 async function classify(op, filledPath, lookup2, opts = {}) {
+  const fv = featureVerdict(filledPath);
+  if (fv.tier === 3) return fv;
+  const verdict = await classifyTier(op, filledPath, lookup2, opts);
+  if (verdict.tier === 3) return { ...verdict, feature: fv.feature };
+  if (fv.sensitive) return { tier: 2, feature: fv.feature, sensitive: true, reason: `${verdict.reason} (critical: ${fv.feature})` };
+  return { ...verdict, feature: fv.feature };
+}
+async function classifyTier(op, filledPath, lookup2, opts) {
   if (op.method === "DELETE") {
     const m = SCREENSHOT_DELETE.exec(filledPath);
     if (m) return classifyScreenshotDelete(decodeURIComponent(m[1]), lookup2, Boolean(opts.early));
@@ -36982,13 +37182,17 @@ async function classify(op, filledPath, lookup2, opts = {}) {
   }
   return { tier: 2, reason: tier2Reason(op, filledPath) };
 }
-function tier2Reason(op, path6) {
-  if (path6.startsWith("/v1/customerReviewResponses")) return "a public reply, visible to everyone on the App Store";
-  if (path6.startsWith("/v1/betaTesters") || path6.endsWith("/relationships/betaTesters")) return "this adds a tester and Apple may email them an invitation";
-  if (path6.startsWith("/v1/reviewSubmissions") || path6.startsWith("/v1/reviewSubmissionItems")) return "this affects what is submitted to App Review";
-  if (path6.startsWith("/v1/appStoreVersionReleaseRequests") || path6.includes("PhasedRelease")) return "this releases or rolls out a version to real users";
-  if (/subscription|inAppPurchase|appPrice|winBackOffer|offerCode|promotedPurchase/i.test(path6)) return "this affects pricing or what customers pay";
-  if (path6.startsWith("/v1/appInfoLocalizations")) return "the app name and subtitle are public on the store once released";
+function tier2Reason(op, path7) {
+  if (path7.startsWith("/v1/customerReviewResponses")) return "a public reply, visible to everyone on the App Store";
+  if (path7.startsWith("/v1/betaTesters") || path7.endsWith("/relationships/betaTesters")) return "this adds a tester and Apple may email them an invitation";
+  if (path7.startsWith("/v1/reviewSubmissions") || path7.startsWith("/v1/reviewSubmissionItems")) return "this affects what is submitted to App Review";
+  if (path7.startsWith("/v1/appStoreVersionReleaseRequests") || path7.includes("PhasedRelease")) return "this releases or rolls out a version to real users";
+  if (/subscription|inAppPurchase|appPrice|winBackOffer|offerCode|promotedPurchase/i.test(path7)) return "this affects pricing or what customers pay";
+  if (path7.startsWith("/v1/appInfoLocalizations")) return "the app name and subtitle are public on the store once released";
+  if (/^\/v1\/(users|userInvitations)/.test(path7)) return "this changes who can access your App Store Connect account";
+  if (/^\/v1\/(certificates|profiles|bundleIds|bundleIdCapabilities|devices|merchantIds|passTypeIds)/.test(path7)) {
+    return "this changes code-signing assets; it can break builds made by EAS or Xcode";
+  }
   return "changes to your App Store account need your confirmation";
 }
 
@@ -37016,7 +37220,7 @@ function resolveValue(value, results) {
   }
   return value;
 }
-var findOperation = (method, path6) => loadSpec().operations.find((o) => o.method === method.toUpperCase() && o.path === path6);
+var findOperation = (method, path7) => loadSpec().operations.find((o) => o.method === method.toUpperCase() && o.path === path7);
 function previewPath(template, pathParams = {}) {
   return template.replace(/\{([^}]+)\}/g, (_, name) => {
     const v = pathParams[name];
@@ -37039,6 +37243,7 @@ async function preparePlan({ title, steps, deps }) {
   const resolvedSteps = [];
   const previews = [];
   let worst = 1;
+  let sensitive = false;
   for (const [i, s] of steps.entries()) {
     const op = s.operationId ? getOperation(s.operationId) : findOperation(s.method, s.path);
     if (!op) throw new Error(`Step ${i}: no such API operation (${s.operationId || `${s.method} ${s.path}`}).`);
@@ -37060,13 +37265,14 @@ async function preparePlan({ title, steps, deps }) {
     const placeholders = hasPlaceholder(s.pathParams) || hasPlaceholder(s.body);
     let verdict;
     if (placeholders) {
-      verdict = { tier: Math.max(2, early.tier), reason: "depends on an earlier step in this plan" };
+      verdict = { tier: Math.max(2, early.tier), sensitive: early.sensitive, feature: early.feature, reason: "depends on an earlier step in this plan" };
     } else {
       const filled = stepPath(op, s.pathParams, []);
       verdict = await classify(op, filled, deps.get);
     }
     if (verdict.tier === 3) return { allowed: false, tier: 3, blocked: true, reason: `Step ${i}: ${verdict.reason}` };
     worst = Math.max(worst, verdict.tier);
+    sensitive ||= Boolean(verdict.sensitive);
     resolvedSteps.push({ op, pathParams: s.pathParams || {}, query: s.query || {}, body: s.body, tier: verdict.tier, label: s.label || op.operationId });
     previews.push({
       step: i,
@@ -37077,7 +37283,7 @@ async function preparePlan({ title, steps, deps }) {
       requestBody: s.body
     });
   }
-  const ticket = deps.store.create({ kind: "plan", title, steps: resolvedSteps, tier: worst });
+  const ticket = deps.store.create({ kind: "plan", title, steps: resolvedSteps, tier: worst, sensitive });
   return {
     allowed: true,
     kind: "plan",
@@ -37088,7 +37294,8 @@ async function preparePlan({ title, steps, deps }) {
     stepCount: previews.length,
     steps: previews,
     note: "Steps run in order. If one fails the plan stops, and the result lists exactly what was done and what was not.",
-    nextStep: worst === 1 ? "Low risk. Apply with asc_apply_safe_change (or asc_apply_change)." : 'Show this plan to the owner in plain English and wait for their explicit "yes", then apply with asc_apply_change.'
+    sensitive: sensitive || void 0,
+    nextStep: sensitive ? 'This plan contains a CRITICAL change. Show it to the owner in plain English, say plainly what could go wrong, and wait for their explicit "yes". Then apply with asc_apply_sensitive_change.' : worst === 1 ? "Low risk. Apply with asc_apply_safe_change (or asc_apply_change)." : 'Show this plan to the owner in plain English and wait for their explicit "yes", then apply with asc_apply_change.'
   };
 }
 var simplifyData = (body) => {
@@ -37104,6 +37311,7 @@ async function applyPlanPayload({ payload, deps }) {
       const verdict = await classify(s.op, filled, deps.get);
       if (verdict.tier === 3) throw new Error(`Blocked: ${verdict.reason}`);
       if (verdict.tier > s.tier) throw new Error(`The situation changed since the preview (${verdict.reason}).`);
+      if (verdict.sensitive && !payload.sensitive) throw new Error("This step became a critical change since the preview. Prepare the plan again.");
       const body = s.body === void 0 ? void 0 : resolveValue(s.body, results);
       const response = await deps.send(s.op.method, filled, resolveValue(s.query, results), body);
       results[i] = simplifyData(response);
@@ -37222,11 +37430,14 @@ async function prepareChange({ op, pathParams = {}, query = {}, body, deps }) {
     }
   }
   const changes = diffAttributes(before, body);
-  const ticket = deps.store.create({ op, pathParams, query, body, filledPath, tier: verdict.tier, before });
+  const sensitive = Boolean(verdict.sensitive);
+  const ticket = deps.store.create({ op, pathParams, query, body, filledPath, tier: verdict.tier, before, sensitive, feature: verdict.feature });
   return {
     allowed: true,
     tier: verdict.tier,
     tierReason: verdict.reason,
+    feature: verdict.feature,
+    sensitive: sensitive || void 0,
     ticket: ticket.id,
     expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
     operation,
@@ -37234,10 +37445,27 @@ async function prepareChange({ op, pathParams = {}, query = {}, body, deps }) {
     before,
     beforeNote,
     requestBody: body,
-    nextStep: verdict.tier === 1 ? "Low risk. Apply with asc_apply_safe_change (or asc_apply_change)." : 'Show this preview to the owner in plain English and wait for their explicit "yes", then apply with asc_apply_change.'
+    nextStep: nextStepFor(verdict.tier, sensitive)
   };
 }
-async function applyChange({ ticketId, requireTier1 = false, deps }) {
+function nextStepFor(tier, sensitive) {
+  if (sensitive) {
+    return 'CRITICAL change. Show this preview to the owner in plain English, say plainly what could go wrong, and wait for their explicit "yes". Then apply with asc_apply_sensitive_change (asc_apply_change refuses it).';
+  }
+  return tier === 1 ? "Low risk. Apply with asc_apply_safe_change (or asc_apply_change)." : 'Show this preview to the owner in plain English and wait for their explicit "yes", then apply with asc_apply_change.';
+}
+function checkApplyTool(payload, { requireTier1 = false, sensitiveTool = false } = {}) {
+  if (payload.sensitive && !sensitiveTool) {
+    throw new Error("This is a CRITICAL change (users or signing). It can only be applied with asc_apply_sensitive_change, after the owner says yes.");
+  }
+  if (!payload.sensitive && sensitiveTool) {
+    throw new Error("asc_apply_sensitive_change only applies critical changes. Use asc_apply_change (or asc_apply_safe_change) for this ticket.");
+  }
+  if (requireTier1 && payload.tier !== 1) {
+    throw new Error("This ticket is not low-risk (Tier 2). It must be applied with asc_apply_change so the owner is asked first.");
+  }
+}
+async function applyChange({ ticketId, requireTier1 = false, sensitiveTool = false, deps }) {
   if (!deps.writesEnabled()) {
     throw new Error(
       'Writes are switched off (kill switch). To allow changes, set "writesEnabled": true in the plugin config file. Previews still work.'
@@ -37245,20 +37473,19 @@ async function applyChange({ ticketId, requireTier1 = false, deps }) {
   }
   const ticket = deps.store.peek(ticketId);
   const p = ticket.payload;
-  if (requireTier1 && p.tier !== 1) {
-    throw new Error("This ticket is not low-risk (Tier 2). It must be applied with asc_apply_change so the owner is asked first.");
-  }
+  checkApplyTool(p, { requireTier1, sensitiveTool });
   if (p.kind === "plan") {
     deps.store.markUsed(ticketId);
     return applyPlanPayload({ payload: p, deps });
   }
   if (p.kind === "screenshots") {
+    if (!currentFeatures().listing) throw new Error('The "listing" feature was switched off since the preview, so this upload is refused.');
     deps.store.markUsed(ticketId);
     return deps.runScreenshots(p);
   }
   const verdict = await classify(p.op, p.filledPath, deps.get);
   if (verdict.tier === 3) throw new Error(`Blocked: ${verdict.reason}`);
-  if (verdict.tier > p.tier) {
+  if (verdict.tier > p.tier || Boolean(verdict.sensitive) !== Boolean(p.sensitive)) {
     throw new Error(`The situation changed since the preview (${verdict.reason}). Prepare the change again.`);
   }
   deps.store.markUsed(ticketId);
@@ -37273,9 +37500,9 @@ async function applyChange({ ticketId, requireTier1 = false, deps }) {
 }
 
 // monitor.js
-import fs4 from "node:fs";
+import fs5 from "node:fs";
 import os3 from "node:os";
-import path4 from "node:path";
+import path5 from "node:path";
 
 // release.js
 var flat = (r) => r ? { id: r.id, type: r.type, ...r.attributes || {} } : null;
@@ -37288,9 +37515,9 @@ var qs = (o) => {
 };
 var GONE = /* @__PURE__ */ new Set(["REPLACED_WITH_NEW_VERSION", "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE", "NOT_APPLICABLE"]);
 var SUBMISSION_OPEN = ["READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES"];
-var opFor = (method, path6) => {
-  const op = findOperation(method, path6);
-  if (!op) throw new Error(`Apple's API has no ${method} ${path6}.`);
+var opFor = (method, path7) => {
+  const op = findOperation(method, path7);
+  if (!op) throw new Error(`Apple's API has no ${method} ${path7}.`);
   return op;
 };
 async function resolveApp(deps, appId2) {
@@ -37311,13 +37538,13 @@ async function findVersion(deps, { appId: appId2, version: version2, platform = 
   const editable = all.find((v) => EDITABLE_VERSION_STATES.has(stateOf3(v)));
   const live = all.find((v) => stateOf3(v) === "READY_FOR_SALE");
   const inFlight = all.find((v) => !EDITABLE_VERSION_STATES.has(stateOf3(v)) && stateOf3(v) !== "READY_FOR_SALE");
-  const pick2 = mode === "live" ? live : mode === "any" ? editable || inFlight || live : editable;
-  if (!pick2) {
+  const pick3 = mode === "live" ? live : mode === "any" ? editable || inFlight || live : editable;
+  if (!pick3) {
     throw new Error(
       mode === "editable" ? "There is no editable (draft) version. Create one with asc_create_version first." : "No matching version found."
     );
   }
-  return pick2;
+  return pick3;
 }
 var present = (s) => typeof s === "string" && s.trim().length > 0;
 async function releaseOverview(deps, { appId: appId2, version: version2, platform = "IOS" }) {
@@ -37618,18 +37845,18 @@ async function prepareReleaseNow(deps, { appId: appId2, version: version2, platf
 }
 
 // monitor.js
-var stateDir = () => process.env.CLAUDE_PLUGINS_STATE_DIR || path4.join(os3.homedir(), ".claude-plugins", "state");
-var stateFile = (name) => path4.join(stateDir(), `${name}.json`);
+var stateDir = () => process.env.CLAUDE_PLUGINS_STATE_DIR || path5.join(os3.homedir(), ".claude-plugins", "state");
+var stateFile = (name) => path5.join(stateDir(), `${name}.json`);
 function loadState(name) {
   try {
-    return JSON.parse(fs4.readFileSync(stateFile(name), "utf8"));
+    return JSON.parse(fs5.readFileSync(stateFile(name), "utf8"));
   } catch {
     return null;
   }
 }
 function saveState(name, value) {
-  fs4.mkdirSync(stateDir(), { recursive: true });
-  fs4.writeFileSync(stateFile(name), JSON.stringify(value, null, 1));
+  fs5.mkdirSync(stateDir(), { recursive: true });
+  fs5.writeFileSync(stateFile(name), JSON.stringify(value, null, 1));
 }
 async function appleSnapshot(deps, { appId: appId2 }) {
   const app = await resolveApp(deps, appId2);
@@ -37712,8 +37939,8 @@ async function appleCheckChanges(deps, { appId: appId2, save = true }) {
 
 // screenshots.js
 import crypto3 from "node:crypto";
-import fs5 from "node:fs";
-import path5 from "node:path";
+import fs6 from "node:fs";
+import path6 from "node:path";
 var MAX_PER_SET = 10;
 var MAX_FILE_BYTES = 25 * 1024 * 1024;
 var enc = encodeURIComponent;
@@ -37736,22 +37963,25 @@ function imageSize(buf) {
   return null;
 }
 function inspectFile(p) {
-  if (typeof p !== "string" || !path5.isAbsolute(p)) throw new Error(`"${p}" must be a full file path (for example C:\\Users\\you\\Pictures\\shot1.png).`);
-  if (!/\.(png|jpe?g)$/i.test(p)) throw new Error(`${path5.basename(p)}: only PNG or JPEG screenshots are accepted.`);
+  if (typeof p !== "string" || !path6.isAbsolute(p)) throw new Error(`"${p}" must be a full file path (for example C:\\Users\\you\\Pictures\\shot1.png).`);
+  if (!/\.(png|jpe?g)$/i.test(p)) throw new Error(`${path6.basename(p)}: only PNG or JPEG screenshots are accepted.`);
   let st;
   try {
-    st = fs5.statSync(p);
+    st = fs6.statSync(p);
   } catch {
     throw new Error(`${p} does not exist.`);
   }
   if (!st.isFile()) throw new Error(`${p} is not a file.`);
-  if (st.size === 0 || st.size > MAX_FILE_BYTES) throw new Error(`${path5.basename(p)}: size must be between 1 byte and ${MAX_FILE_BYTES / 1024 / 1024} MB.`);
-  const buf = fs5.readFileSync(p);
+  if (st.size === 0 || st.size > MAX_FILE_BYTES) throw new Error(`${path6.basename(p)}: size must be between 1 byte and ${MAX_FILE_BYTES / 1024 / 1024} MB.`);
+  const buf = fs6.readFileSync(p);
   const dims = imageSize(buf);
-  if (!dims) throw new Error(`${path5.basename(p)} does not look like a valid PNG or JPEG.`);
-  return { path: p, name: path5.basename(p), size: st.size, md5: crypto3.createHash("md5").update(buf).digest("hex"), width: dims.width, height: dims.height, format: dims.type };
+  if (!dims) throw new Error(`${path6.basename(p)} does not look like a valid PNG or JPEG.`);
+  return { path: p, name: path6.basename(p), size: st.size, md5: crypto3.createHash("md5").update(buf).digest("hex"), width: dims.width, height: dims.height, format: dims.type };
 }
 async function prepareScreenshots(deps, { appId: appId2, version: version2, locale = "en-US", displayType, files, platform = "IOS" }) {
+  if (!currentFeatures().listing) {
+    return { allowed: false, tier: 3, blocked: true, reason: 'The "listing" feature is switched off in your settings. Run /hypercaffium-apple:setup to see or change your settings.' };
+  }
   if (!Array.isArray(files) || files.length === 0) throw new Error("Pass files: a list of full paths to PNG or JPEG screenshots.");
   if (files.length > MAX_PER_SET) throw new Error(`At most ${MAX_PER_SET} screenshots per set.`);
   const setOp = findOperation("POST", "/v1/appScreenshotSets");
@@ -37824,7 +38054,7 @@ async function runScreenshots(payload, deps, { fetchImpl = fetch, pollMs = 2e3, 
     for (const f of payload.files) {
       const entry = { file: f.name };
       results.push(entry);
-      const buf = fs5.readFileSync(f.path);
+      const buf = fs6.readFileSync(f.path);
       if (buf.length !== f.size || crypto3.createHash("md5").update(buf).digest("hex") !== f.md5) {
         throw new Error(`${f.name} changed on disk since the preview. Prepare again.`);
       }
@@ -37901,9 +38131,9 @@ var qs2 = (o) => {
   const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
   return e.length ? `?${e.map(([k, v]) => `${k}=${enc2(String(v))}`).join("&")}` : "";
 };
-var opFor2 = (method, path6) => {
-  const op = findOperation(method, path6);
-  if (!op) throw new Error(`Apple's API has no ${method} ${path6}.`);
+var opFor2 = (method, path7) => {
+  const op = findOperation(method, path7);
+  if (!op) throw new Error(`Apple's API has no ${method} ${path7}.`);
   return op;
 };
 var clone2 = (v) => v === void 0 ? void 0 : JSON.parse(JSON.stringify(v));
@@ -38214,16 +38444,16 @@ var qs3 = (o) => {
   const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
   return e.length ? `?${e.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&")}` : "";
 };
-var opFor3 = (method, path6) => {
-  const op = findOperation(method, path6);
-  if (!op) throw new Error(`Apple's API has no ${method} ${path6}.`);
+var opFor3 = (method, path7) => {
+  const op = findOperation(method, path7);
+  if (!op) throw new Error(`Apple's API has no ${method} ${path7}.`);
   return op;
 };
 var enc3 = encodeURIComponent;
-async function getAll(deps, path6, { pages = 6 } = {}) {
+async function getAll(deps, path7, { pages = 6 } = {}) {
   const data = [];
   const included = [];
-  let next = path6;
+  let next = path7;
   for (let i = 0; i < pages && next; i++) {
     const body = await deps.get(next);
     data.push(...body.data || []);
@@ -38260,11 +38490,11 @@ async function subscriptionPrices(deps, { subscriptionId: subscriptionId2, terri
     if (!prev || String(r.startDate || "") >= String(prev.startDate || "")) current.set(r.territory, r);
   }
   const scheduled = rows.filter((r) => r.startDate && r.startDate > today);
-  const pick2 = (r) => !territory || r.territory === territory;
+  const pick3 = (r) => !territory || r.territory === territory;
   return {
     subscriptionId: subscriptionId2,
-    current: [...current.values()].filter(pick2).sort((a, b) => String(a.territory).localeCompare(String(b.territory))),
-    scheduled: scheduled.filter(pick2).sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)))
+    current: [...current.values()].filter(pick3).sort((a, b) => String(a.territory).localeCompare(String(b.territory))),
+    scheduled: scheduled.filter(pick3).sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)))
   };
 }
 async function findPricePoint(deps, { subscriptionId: subscriptionId2, territory = "USA", amount }) {
@@ -38457,6 +38687,12 @@ var PLUGIN = "app-store-connect";
   const tz = loadConfig().timezone;
   if (tz && !process.env.HYPERCAFFIUM_TIMEZONE) process.env.HYPERCAFFIUM_TIMEZONE = tz;
 }
+setFeatureSource(() => loadConfig().features);
+var STARTUP_FEATURES = currentFeatures();
+var SETUP_SCRIPT = (() => {
+  const here = fileURLToPath2(import.meta.url);
+  return /[\\/]dist[\\/][^\\/]+$/.test(here) ? fileURLToPath2(new URL("./setup.mjs", import.meta.url)) : fileURLToPath2(new URL("./dist/setup.mjs", import.meta.url));
+})();
 async function ascSend(method, pathname, query = {}, body) {
   const url2 = new URL(pathname, API_ORIGIN);
   assertApiUrl(url2);
@@ -38497,7 +38733,7 @@ function simplify(body) {
 var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(value, null, 2)) }] });
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
-var server = new McpServer({ name: "hypercaffium-apple", version: "0.7.1" });
+var server = new McpServer({ name: "hypercaffium-apple", version: "0.9.0" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();
@@ -38510,6 +38746,9 @@ function readTool(name, description, inputSchema, handler) {
       return fail(err);
     }
   });
+}
+function featureTool(feature, ...args) {
+  if (STARTUP_FEATURES[feature]) readTool(...args);
 }
 readTool(
   "asc_check_setup",
@@ -38525,6 +38764,8 @@ readTool(
       apiAccepted: true,
       appsVisible: body.meta?.paging?.total ?? "unknown",
       writesEnabled: cfg.writesEnabled,
+      featuresChosen: cfg.configured,
+      featuresNote: cfg.configured ? "See asc_settings for the feature switches." : "Feature switches are at their defaults. The owner can choose them with /hypercaffium-apple:setup.",
       writesNote: cfg.writesEnabled ? "Writes are ON: changes need asc_prepare_change then asc_apply_change." : 'Writes are OFF (kill switch). Previews still work. Set "writesEnabled": true in the config file to allow changes.'
     };
   }
@@ -38709,14 +38950,14 @@ readTool(
     return { ...preview, writesEnabled: loadConfig().writesEnabled };
   }
 );
-function registerApply(name, description, requireTier1, annotations) {
+function registerApply(name, description, requireTier1, annotations, sensitiveTool = false) {
   server.registerTool(
     name,
     { description, inputSchema: { ticket: external_exports.string().describe("The ticket from asc_prepare_change") }, annotations },
     async ({ ticket }) => {
       const started = Date.now();
       try {
-        const out = await applyChange({ ticketId: ticket, requireTier1, deps: writeDeps });
+        const out = await applyChange({ ticketId: ticket, requireTier1, sensitiveTool, deps: writeDeps });
         audit(PLUGIN, {
           tool: name,
           kind: "write",
@@ -38728,6 +38969,7 @@ function registerApply(name, description, requireTier1, annotations) {
           stepsDone: out.completed?.length ?? out.results?.length,
           partialFailure: out.applied === false ? true : void 0,
           tier: out.tier,
+          sensitive: sensitiveTool || void 0,
           beforeJson: JSON.stringify(out.before ?? null).slice(0, 4e3),
           afterJson: JSON.stringify(out.result ?? null).slice(0, 4e3)
         });
@@ -38751,6 +38993,63 @@ registerApply(
   true,
   { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
 );
+registerApply(
+  "asc_apply_sensitive_change",
+  "Applies ONLY critical changes (users and permissions, signing assets), and only ones previewed by a prepare tool that said to use this tool. It is separate from asc_apply_change so that allowing that tool can never cover a critical change. Only call this after the owner has read the preview and explicitly said yes.",
+  false,
+  { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  true
+);
+function settingsView() {
+  const cfg = loadConfig();
+  return {
+    settingsFile: CONFIG_PATH,
+    configured: cfg.configured,
+    credentialsProblems: configProblems(cfg),
+    writesEnabled: cfg.writesEnabled,
+    features: describeFeatures(currentFeatures(), "apple"),
+    toolsLoadedFor: Object.keys(STARTUP_FEATURES).filter((k) => STARTUP_FEATURES[k]),
+    criticalSettings: `Critical features can only be switched ON in the terminal menu. Open a terminal window (not this chat) and run: node "${SETUP_SCRIPT}"`,
+    restartNote: "After changing features, restart Claude Code so the dedicated tools match. Switching a feature off takes effect immediately either way."
+  };
+}
+readTool(
+  "asc_settings",
+  "Show this plugin's settings: whether credentials are set up, the writes master switch, and every feature switch grouped by risk level (low, medium, high, critical) with what it covers. Read-only.",
+  {},
+  async () => settingsView()
+);
+server.registerTool(
+  "asc_save_settings",
+  {
+    description: "Save this plugin's settings file (used by /hypercaffium-apple:setup). Only change what the owner chose in this conversation. Critical features (users, signing) can be switched OFF here but never ON: that needs the terminal menu. Writes the JSON file safely (paths are escaped for you).",
+    inputSchema: {
+      keyId: external_exports.string().regex(/^[A-Z0-9]{10}$/).optional().describe("10-character Key ID"),
+      issuerId: external_exports.string().uuid().optional().describe("Issuer ID (a UUID)"),
+      keyPath: external_exports.string().optional().describe("Full path to the AuthKey_XXXXXXXXXX.p8 file"),
+      timezone: external_exports.string().optional().describe("IANA time zone such as America/New_York"),
+      writesEnabled: external_exports.boolean().optional().describe("Master switch for all changes"),
+      features: external_exports.record(external_exports.string(), external_exports.boolean()).optional().describe('Feature switches to change, e.g. {"uploads": false}')
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+  },
+  async (args) => {
+    try {
+      if (args.keyPath && !/\.p8$/i.test(args.keyPath)) throw new Error("keyPath must point to the .p8 key file.");
+      if (args.timezone) new Intl.DateTimeFormat("en-US", { timeZone: args.timezone });
+      const turnedOnCritical = Object.entries(args.features || {}).filter(([k, v]) => v && isCritical(k) && !currentFeatures()[k]);
+      if (turnedOnCritical.length) {
+        throw new Error(`${turnedOnCritical.map(([k]) => k).join(", ")} can only be switched on in the terminal menu: open a terminal window and run node "${SETUP_SCRIPT}"`);
+      }
+      saveSettings(CONFIG_PATH, args, "apple");
+      audit(PLUGIN, { tool: "asc_save_settings", kind: "settings", ok: true, changed: Object.keys(args) });
+      return ok({ saved: true, ...settingsView() });
+    } catch (err) {
+      audit(PLUGIN, { tool: "asc_save_settings", kind: "settings", ok: false, error: String(err.message || err) });
+      return fail(err);
+    }
+  }
+);
 var appId = external_exports.string().optional().describe("Numeric App Store Connect app ID (optional if the account has one app)");
 var versionArg = external_exports.string().optional().describe("Version string like 1.1.4 (default: the editable draft version)");
 readTool(
@@ -38759,7 +39058,8 @@ readTool(
   { appId, version: versionArg },
   (a) => releaseOverview(writeDeps, a)
 );
-readTool(
+featureTool(
+  "listing",
   "asc_edit_listing",
   "Prepare an edit to a draft version's App Store text for one locale: description, keywords, whatsNew (release notes), promotionalText, marketingUrl, supportUrl. Returns a preview with before/after and a ticket. Tier 1 on a draft. Creates the locale if it does not exist.",
   {
@@ -38775,19 +39075,22 @@ readTool(
   },
   ({ appId: a, version: version2, locale, ...fields }) => prepareListingEdit(writeDeps, { appId: a, version: version2, locale, fields })
 );
-readTool(
+featureTool(
+  "listing",
   "asc_set_release_notes",
   `Prepare saving the release notes ("What's New") for a draft version in one locale. Shows the old and new text and returns a ticket (Tier 1 on a draft).`,
   { appId, version: versionArg, locale: external_exports.string().default("en-US"), whatsNew: external_exports.string().describe("The release notes text") },
   ({ appId: a, version: version2, locale, whatsNew }) => prepareListingEdit(writeDeps, { appId: a, version: version2, locale, fields: { whatsNew } })
 );
-readTool(
+featureTool(
+  "releases",
   "asc_attach_build",
   "Prepare choosing which processed build a draft version will ship (the build EAS uploaded). Checks the build exists, is VALID and not expired. Tier 1 on a draft.",
   { appId, version: versionArg, buildNumber: external_exports.string().describe('Build number, e.g. "57"') },
   (a) => prepareAttachBuild(writeDeps, a)
 );
-readTool(
+featureTool(
+  "releases",
   "asc_create_version",
   "Prepare creating a new draft App Store version (e.g. 1.1.4). Refuses if that version exists or another draft is already open. Tier 1 (a draft is invisible to users).",
   {
@@ -38797,31 +39100,36 @@ readTool(
   },
   (a) => prepareCreateVersion(writeDeps, a)
 );
-readTool(
+featureTool(
+  "releases",
   "asc_submit_for_review",
   "Prepare submitting a draft version to App Review. Runs the pre-flight checklist first and returns the problems (with NO ticket) if anything blocks it. Otherwise returns a 3-step plan and a ticket (Tier 2). States plainly whether the version will release automatically after approval.",
   { appId, version: versionArg },
   (a) => prepareSubmit(writeDeps, a)
 );
-readTool(
+featureTool(
+  "releases",
   "asc_cancel_submission",
   "Prepare cancelling the open App Review submission (pulls the version back to editable). Tier 2.",
   { appId },
   (a) => prepareCancelSubmission(writeDeps, a)
 );
-readTool(
+featureTool(
+  "releases",
   "asc_phased_release",
   "Prepare a phased-release action for a version: enable (before release), pause, resume, or complete (release to everyone now). Tier 2.",
   { appId, version: versionArg, action: external_exports.enum(["enable", "pause", "resume", "complete"]) },
   (a) => preparePhasedRelease(writeDeps, a)
 );
-readTool(
+featureTool(
+  "releases",
   "asc_release_version",
   "Prepare releasing an APPROVED version that is waiting for you (PENDING_DEVELOPER_RELEASE) to the App Store. Tier 2.",
   { appId, version: versionArg },
   (a) => prepareReleaseNow(writeDeps, a)
 );
-readTool(
+featureTool(
+  "listing",
   "asc_upload_screenshots",
   "Prepare uploading PNG/JPEG screenshots from local files to a DRAFT version for one locale and display type (e.g. APP_IPHONE_67). Adds only; never deletes. Returns a ticket (Tier 1). Applying uploads the files and waits for Apple to process them.",
   {
@@ -38833,7 +39141,8 @@ readTool(
   },
   (a) => prepareScreenshots(writeDeps, a)
 );
-readTool(
+featureTool(
+  "listing",
   "asc_clear_screenshots",
   "Prepare REMOVING screenshots of one display type and locale from a DRAFT version (so new ones can be uploaded). This is the only delete the plugin allows, and only for a draft. Tier 2: needs the owner's explicit yes. keepFirst keeps that many from the start of the set.",
   {
@@ -38864,7 +39173,8 @@ readTool(
   { subscriptionId, territory: external_exports.string().default("USA"), amount: external_exports.number().optional() },
   (a) => findPricePoint(writeDeps, a)
 );
-readTool(
+featureTool(
+  "pricing",
   "asc_set_subscription_price",
   "Prepare a subscription price change. Previews every territory old-to-new with currency and percentage, and whether existing subscribers keep their price. Tier 2 ALWAYS; never automatic. allTerritories sets Apple's equalized price in every territory.",
   {
@@ -38878,7 +39188,8 @@ readTool(
   },
   (a) => prepareSetPrice(writeDeps, a)
 );
-readTool(
+featureTool(
+  "pricing",
   "asc_edit_subscription",
   "Prepare editing a subscription's name, review note, family sharing or group level. Tier 2.",
   {
@@ -38890,13 +39201,15 @@ readTool(
   },
   ({ subscriptionId: id, ...fields }) => prepareEditSubscription(writeDeps, { subscriptionId: id, fields })
 );
-readTool(
+featureTool(
+  "pricing",
   "asc_edit_subscription_localization",
   "Prepare editing (or creating) a subscription's display name and description for one locale. Name 2-30 characters, description up to 45. Tier 2.",
   { subscriptionId, locale: external_exports.string(), name: external_exports.string().optional(), description: external_exports.string().optional() },
   (a) => prepareEditSubscriptionLocalization(writeDeps, a)
 );
-readTool(
+featureTool(
+  "pricing",
   "asc_create_intro_offer",
   "Prepare an introductory offer (free trial, pay-as-you-go, or pay-up-front) on a subscription. Tier 2. For promotional offers, offer codes and win-back offers use asc_search_api + asc_prepare_change.",
   {
@@ -38921,13 +39234,15 @@ readTool(
   },
   (a) => reviewInbox(writeDeps, a)
 );
-readTool(
+featureTool(
+  "reviews",
   "asc_reply_to_review",
   "Prepare a PUBLIC reply to an App Store review (visible to everyone). Shows the review, any existing reply that would be replaced, and returns a ticket (Tier 2, needs the owner's explicit yes).",
   { reviewId: external_exports.string().describe("Review id from asc_review_inbox"), text: external_exports.string().describe("The reply, 5970 characters max") },
   (a) => prepareReplyToReview(writeDeps, a)
 );
-readTool(
+featureTool(
+  "listing",
   "asc_edit_review_details",
   "Prepare editing the App Review details of a draft version: contact name, phone, email, whether a demo account is required and its login, and notes for the reviewer. The demo password is never shown in previews or the audit log. Tier 1 on a draft.",
   {
@@ -38944,7 +39259,8 @@ readTool(
   },
   ({ appId: a, version: version2, ...fields }) => prepareReviewDetails(writeDeps, { appId: a, version: version2, fields })
 );
-readTool(
+featureTool(
+  "listing",
   "asc_edit_app_info",
   "Prepare editing the app name, subtitle, privacy policy URL, privacy choices URL or privacy policy text for one locale. Only possible while a version is being prepared. Name and subtitle become public on release, so this is Tier 2.",
   {
@@ -38964,13 +39280,15 @@ readTool(
   { appId },
   (a) => testflightOverview(writeDeps, a)
 );
-readTool(
+featureTool(
+  "testing",
   "asc_testflight_set_notes",
   "Prepare the TestFlight What to test notes for a build and locale (creates them if missing). Tier 1: testers only, easy to edit back.",
   { appId, buildNumber: external_exports.string().describe("Build number, e.g. 57"), locale: external_exports.string().default("en-US"), whatsNew: external_exports.string() },
   (a) => prepareTestflightNotes(writeDeps, a)
 );
-readTool(
+featureTool(
+  "testing",
   "asc_testflight_add_tester",
   "Prepare adding a tester to a TestFlight group (external groups: Apple emails an invitation). Reuses the person if they already exist. Tier 2.",
   {
@@ -38982,7 +39300,8 @@ readTool(
   },
   (a) => prepareAddTester(writeDeps, a)
 );
-readTool(
+featureTool(
+  "testing",
   "asc_testflight_add_build_to_group",
   "Prepare making a processed build available to a TestFlight group. External groups need Apple's beta review for a new build. Tier 2.",
   { appId, buildNumber: external_exports.string(), group: external_exports.string().describe("TestFlight group name or id") },

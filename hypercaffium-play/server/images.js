@@ -3,6 +3,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { currentFeatures } from './rules.js';
 import { toLocalTime } from './util.js';
 
 const APP = '/androidpublisher/v3/applications';
@@ -74,6 +75,9 @@ export function inspectImage(p, rule, imageType) {
 // ---- prepare ---------------------------------------------------------------
 
 export async function prepareUploadImages(deps, { packageName, language = 'en-US', imageType, files }) {
+  if (!currentFeatures().listing) {
+    return { allowed: false, tier: 3, blocked: true, reason: 'The "listing" feature is switched off in your settings. Run /hypercaffium-play:setup to see or change your settings.' };
+  }
   const pkg = packageName || deps.defaultPackage();
   if (!pkg || !/^[A-Za-z0-9._]+$/.test(pkg)) throw new Error('A valid packageName is required (or set defaultPackageName in the config file).');
   if (!LANG.test(language)) throw new Error(`"${language}" is not a language code like en-US.`);

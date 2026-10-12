@@ -3263,8 +3263,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path6) {
-      let input2 = path6;
+    function removeDotSegments(path7) {
+      let input2 = path7;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3673,8 +3673,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path6 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
+        const path7 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path7 && path7 !== "/" ? path7 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -7187,18 +7187,21 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs6, exportName) {
+    function addFormats(ajv, list, fs7, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs6[f]);
+        ajv.addFormat(f, fs7[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.default = formatsPlugin;
   }
 });
+
+// index.js
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // node_modules/zod/v3/helpers/util.js
 var util;
@@ -7574,8 +7577,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path6, errorMaps, issueData } = params;
-  const fullPath = [...path6, ...issueData.path || []];
+  const { data, path: path7, errorMaps, issueData } = params;
+  const fullPath = [...path7, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -7690,11 +7693,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path6, key) {
+  constructor(parent, value, path7, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path6;
+    this._path = path7;
     this._key = key;
   }
   get path() {
@@ -11648,10 +11651,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path6) {
-  if (!path6)
+function getElementAtPath(obj, path7) {
+  if (!path7)
     return obj;
-  return path6.reduce((acc, key) => acc?.[key], obj);
+  return path7.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -11991,11 +11994,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path6, issues) {
+function prefixIssues(path7, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path6);
+    iss.path.unshift(path7);
     return iss;
   });
 }
@@ -12445,16 +12448,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path6 = []) => {
+  const processError = (error63, path7 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else {
-        const fullpath = [...path6, ...issue2.path];
+        const fullpath = [...path7, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -12493,17 +12496,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path6 = []) => {
+  const processError = (error63, path7 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else {
-        const fullpath = [...path6, ...issue2.path];
+        const fullpath = [...path7, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -12542,8 +12545,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path6 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path6) {
+  const path7 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path7) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -28058,11 +28061,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path6) {
-  if (path6.length === 0) {
+function getDotPath(path7) {
+  if (path7.length === 0) {
     return "object root";
   }
-  return path6.reduce((acc, seg, index) => {
+  return path7.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -30289,13 +30292,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path6 = ref.slice(1).split("/").filter(Boolean);
-  if (path6.length === 0) {
+  const path7 = ref.slice(1).split("/").filter(Boolean);
+  if (path7.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path6[0] === defsKey) {
-    const key = path6[1] === void 0 ? void 0 : decodeJSONPointerSegment(path6[1]);
+  if (path7[0] === defsKey) {
+    const key = path7[1] === void 0 ? void 0 : decodeJSONPointerSegment(path7[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -36609,6 +36612,10 @@ function loadConfig() {
     defaultPackageName: process.env.PLAY_PACKAGE_NAME || file2.defaultPackageName || "",
     writesEnabled: rawWrites === true || /^(1|true|yes)$/i.test(String(rawWrites || "")),
     timezone: process.env.HYPERCAFFIUM_TIMEZONE || file2.timezone || "",
+    // Feature switches (see shared/features.js); missing ones fall back to their defaults.
+    features: file2.features && typeof file2.features === "object" ? file2.features : {},
+    // True once the setup menu has saved settings at least once.
+    configured: Boolean(file2.features),
     fileError
   };
 }
@@ -36656,6 +36663,217 @@ Config file: ${CONFIG_PATH}`);
   return cached2.token;
 }
 
+// ../../shared/features.js
+import fs3 from "node:fs";
+import path3 from "node:path";
+var RISK_LEVELS = ["low", "medium", "high", "critical"];
+var RISK_LABEL = {
+  low: "Low risk: only testers see it, easy to undo",
+  medium: "Medium risk: public, but easy to change back",
+  high: "High risk: reaches real users or money",
+  critical: "Critical: access, signing or customer money"
+};
+var FEATURES = [
+  {
+    key: "testing",
+    risk: "low",
+    label: { apple: "TestFlight", play: "Testing tracks and testers" },
+    help: {
+      apple: "Notes for testers, adding and removing testers, builds in groups, external beta review, expiring builds.",
+      play: "Who can test your app on the internal, closed and open testing tracks."
+    }
+  },
+  {
+    key: "listing",
+    risk: "medium",
+    label: "Store listing",
+    help: "App name, description, keywords, screenshots, preview videos, App Review details and similar listing content."
+  },
+  {
+    key: "reviews",
+    risk: "medium",
+    label: "Review replies",
+    help: "Public replies to customer reviews."
+  },
+  {
+    key: "marketing",
+    risk: "medium",
+    label: "Marketing pages",
+    stores: ["apple"],
+    // Google's API has no custom store listings or listing experiments.
+    help: "Custom product pages, in-app events and product page tests."
+  },
+  {
+    key: "releases",
+    risk: "high",
+    label: "Releases",
+    help: {
+      apple: "Creating versions, attaching builds, submitting for review, phased release, releasing, availability.",
+      play: "Putting versions on tracks, staged rollouts, halting, promoting, release notes."
+    }
+  },
+  {
+    key: "pricing",
+    risk: "high",
+    label: "Prices and offers",
+    help: "Subscriptions, in-app purchases, prices, moving existing subscribers to a new price, offers and offer codes."
+  },
+  {
+    key: "uploads",
+    risk: "high",
+    label: "Uploading app files",
+    help: {
+      apple: "Uploading a build. Skip this if EAS, Xcode or fastlane uploads your builds.",
+      play: "Uploading an .aab app bundle and its crash-decoding (mapping) file. Skip this if EAS or Gradle uploads for you."
+    }
+  },
+  {
+    key: "advanced",
+    risk: "high",
+    label: "Everything else in the API",
+    help: "Rarely used areas the dedicated tools do not cover (for example Game Center or app recovery). Still previewed and confirmed."
+  },
+  {
+    key: "users",
+    risk: "critical",
+    label: "Users and permissions",
+    help: "Inviting people to your developer account, changing their access, removing them."
+  },
+  {
+    key: "signing",
+    risk: "critical",
+    label: "Signing keys",
+    help: {
+      apple: "Certificates, provisioning profiles, bundle IDs and devices. Changing these can break builds made by EAS or Xcode.",
+      play: "Enrolling in and rotating the app signing key. Rotation cannot be undone."
+    }
+  },
+  {
+    key: "refunds",
+    risk: "critical",
+    label: "Refunds and orders",
+    stores: ["play"],
+    // Apple's API has no refund or order actions; Apple handles refunds itself.
+    help: "Refunding orders and cancelling, revoking or deferring customer subscriptions."
+  }
+];
+var featuresFor = (store) => FEATURES.filter((f) => !f.stores || f.stores.includes(store));
+var pick2 = (value, store) => value && typeof value === "object" ? value[store] : value;
+var isCritical = (key) => FEATURES.some((f) => f.key === key && f.risk === "critical");
+var defaultOn = (key) => !isCritical(key);
+function resolveFeatures(fileFeatures, store) {
+  const out = {};
+  for (const f of featuresFor(store)) {
+    const v = fileFeatures && typeof fileFeatures === "object" ? fileFeatures[f.key] : void 0;
+    out[f.key] = typeof v === "boolean" ? v : defaultOn(f.key);
+  }
+  return out;
+}
+function describeFeatures(features, store) {
+  return RISK_LEVELS.map((risk) => ({
+    risk,
+    riskLabel: RISK_LABEL[risk],
+    features: featuresFor(store).filter((f) => f.risk === risk).map((f) => ({ key: f.key, label: pick2(f.label, store), on: Boolean(features[f.key]), help: pick2(f.help, store) }))
+  })).filter((g) => g.features.length);
+}
+function saveSettings(configPath, changes, store, { allowCriticalOn = false } = {}) {
+  let current = {};
+  try {
+    current = JSON.parse(fs3.readFileSync(configPath, "utf8"));
+  } catch (err) {
+    if (err.code !== "ENOENT") throw new Error(`${configPath} exists but is not valid JSON, so it was not changed: ${err.message}`);
+  }
+  const next = { ...current };
+  const { features, ...rest } = changes;
+  for (const [k, v] of Object.entries(rest)) {
+    if (v !== void 0) next[k] = v;
+  }
+  if (features) {
+    const known = new Set(featuresFor(store).map((f) => f.key));
+    const merged = { ...resolveFeatures(current.features, store) };
+    for (const [k, v] of Object.entries(features)) {
+      if (!known.has(k)) throw new Error(`Unknown feature "${k}". Known: ${[...known].join(", ")}.`);
+      if (typeof v !== "boolean") throw new Error(`Feature "${k}" must be true or false.`);
+      if (v && isCritical(k) && !merged[k] && !allowCriticalOn) {
+        throw new Error(`"${k}" is a critical feature. It can only be switched on in the terminal setup menu, not from the chat.`);
+      }
+      merged[k] = v;
+    }
+    next.features = merged;
+  }
+  fs3.mkdirSync(path3.dirname(configPath), { recursive: true });
+  const tmp = `${configPath}.tmp`;
+  fs3.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}
+`);
+  fs3.renameSync(tmp, configPath);
+  return next;
+}
+
+// rules.js
+var featureSource = () => ({});
+function setFeatureSource(fn) {
+  featureSource = fn;
+}
+var currentFeatures = () => resolveFeatures(featureSource(), "play");
+var FEATURE_BY_METHOD = [
+  ["users", /^(users|grants)\./],
+  ["refunds", /^(orders|purchases|externaltransactions)\./],
+  ["signing", /^appsigning\./],
+  ["uploads", /^(edits\.(apks|bundles|deobfuscationfiles|expansionfiles)\.|internalappsharingartifacts\.|appstoreappsreview\.upload)/],
+  ["listing", /^(edits\.(listings|images|details)\.|applications\.dataSafety$)/],
+  ["testing", /^edits\.testers\./],
+  ["releases", /^edits\.tracks\./],
+  ["reviews", /^reviews\./],
+  ["pricing", /^(inappproducts|monetization)\./]
+];
+function featureFor(methodId) {
+  for (const [feature, re] of FEATURE_BY_METHOD) if (re.test(methodId)) return feature;
+  return "advanced";
+}
+var BLOCKED = [
+  {
+    test: (m) => m.method === "DELETE",
+    reason: "Deleting is blocked. Nothing in this plugin removes data from Google Play Console."
+  },
+  {
+    test: (m) => /^edits\.(commit|delete|insert|validate)$/.test(m.id),
+    reason: "Edits are opened, validated and committed by the plugin itself. Never change them directly."
+  }
+];
+var TIER1 = [];
+function classify(method) {
+  const feature = featureFor(method.id);
+  if (!currentFeatures()[feature]) {
+    return {
+      tier: 3,
+      feature,
+      reason: `The "${feature}" feature is switched off in your settings, so this change is refused. Run /hypercaffium-play:setup to see or change your settings.`
+    };
+  }
+  for (const b of BLOCKED) {
+    if (b.test(method)) return { tier: 3, feature, reason: b.reason };
+  }
+  if (isCritical(feature)) return { tier: 2, feature, sensitive: true, reason: criticalReason(feature) };
+  for (const r of TIER1) {
+    if (r.id === method.id) return { tier: 1, feature, reason: r.reason };
+  }
+  return { tier: 2, feature, reason: tier2Reason(method.id) };
+}
+function criticalReason(feature) {
+  if (feature === "users") return "critical: this changes who can access your Google Play developer account";
+  if (feature === "refunds") return "critical: this acts on a customer's money or subscription";
+  return "critical: this changes your app signing key; key rotation cannot be undone";
+}
+function tier2Reason(id) {
+  if (id === "reviews.reply") return "a public reply, visible to everyone on Google Play";
+  if (id.startsWith("edits.listings.") || id.startsWith("edits.images.")) {
+    return "store listing content is public on Google Play as soon as it is committed";
+  }
+  if (id.startsWith("edits.tracks.")) return "a track change reaches testers or real users (most take effect as soon as they are committed)";
+  if (id.startsWith("monetization.") || id.startsWith("inappproducts.")) return "this affects subscriptions or what customers pay";
+  return "changes to your Google Play app need your confirmation (most take effect as soon as they are committed)";
+}
+
 // guard.js
 var V3 = "/androidpublisher/v3/";
 var SAFE_PATH = /^\/androidpublisher\/v3\/[A-Za-z0-9_\-/:.%~]+$/;
@@ -36670,17 +36888,23 @@ var UPLOAD_IMAGE = new RegExp(
   `^/upload${V3}applications/${PKG}/edits/${EDIT_ID}/listings/[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*/(icon|featureGraphic|phoneScreenshots|sevenInchScreenshots|tenInchScreenshots|tvBanner|tvScreenshots|wearScreenshots)$`
 );
 var PURCHASE_ACTIONS = /(:(refund|revoke|cancel|defer|consume|acknowledge))|\/(orders|purchases|externalTransactions|voidedpurchases)(\/|:|$)/i;
-function assertWriteAllowed(method, pathname) {
+var SIGNING = /\/appSigning(:|\/|$)/i;
+var DEV_USERS = new RegExp(`^${V3}developers/[0-9]+/users(/[^/]+(/grants(/[^/]+)?)?)?$`);
+function assertWriteAllowed(method, pathname, features = currentFeatures()) {
   if (pathname.split("/").some((seg) => seg === "." || seg === ".." || /^%2e(%2e)?$/i.test(seg))) {
     throw new Error(`Blocked by safety guard: ${method} ${pathname} contains a dot-segment.`);
   }
-  if (PURCHASE_ACTIONS.test(pathname)) {
-    throw new Error(`Blocked by safety guard: ${method} ${pathname} acts on customer purchases or orders.`);
+  if (PURCHASE_ACTIONS.test(pathname) && !features.refunds) {
+    throw new Error(`Blocked by safety guard: ${method} ${pathname} acts on customer purchases or orders (the "refunds" feature is off).`);
+  }
+  if (SIGNING.test(pathname) && !features.signing) {
+    throw new Error(`Blocked by safety guard: ${method} ${pathname} changes app signing (the "signing" feature is off).`);
   }
   let allowed = false;
   if (method === "POST" && (CREATE_EDIT.test(pathname) || COMMIT.test(pathname) || UPLOAD_IMAGE.test(pathname))) allowed = true;
-  else if (["POST", "PUT", "PATCH"].includes(method)) allowed = APP_PATH.test(pathname) && !/\/users(\/|$)|\/grants(\/|$)/.test(pathname);
-  else if (method === "DELETE") allowed = DELETE_EDIT.test(pathname);
+  else if (["POST", "PUT", "PATCH"].includes(method)) {
+    allowed = APP_PATH.test(pathname) && !/\/users(\/|$)|\/grants(\/|$)/.test(pathname) || Boolean(features.users) && DEV_USERS.test(pathname);
+  } else if (method === "DELETE") allowed = DELETE_EDIT.test(pathname);
   if (!allowed) throw new Error(`Blocked by safety guard: ${method} ${pathname} is not an allowed change.`);
 }
 function assertAllowed(method, pathname) {
@@ -36731,13 +36955,13 @@ async function withTemporaryEdit(pkg, fn) {
 }
 
 // spec.js
-import fs3 from "node:fs";
-import path3 from "node:path";
+import fs4 from "node:fs";
+import path4 from "node:path";
 import { fileURLToPath } from "node:url";
-var HERE = path3.dirname(fileURLToPath(import.meta.url));
+var HERE = path4.dirname(fileURLToPath(import.meta.url));
 var cache;
 function loadSpec() {
-  if (!cache) cache = JSON.parse(fs3.readFileSync(path3.join(HERE, "spec", "play-methods.json"), "utf8"));
+  if (!cache) cache = JSON.parse(fs4.readFileSync(path4.join(HERE, "spec", "play-methods.json"), "utf8"));
   return cache;
 }
 function searchMethods({ query = "", httpMethod, limit = 15 }) {
@@ -36851,44 +37075,6 @@ function limitText(text, max = MAX_OUTPUT_CHARS) {
 
 // writes.js
 import crypto2 from "node:crypto";
-
-// rules.js
-var BLOCKED = [
-  {
-    test: (m) => m.method === "DELETE",
-    reason: "Deleting is blocked. Nothing in this plugin removes data from Google Play Console."
-  },
-  {
-    test: (m) => /^edits\.(commit|delete|insert|validate)$/.test(m.id),
-    reason: "Edits are opened, validated and committed by the plugin itself. Never change them directly."
-  },
-  {
-    test: (m) => /^(users|grants)\./.test(m.id),
-    reason: "Users and permissions are never changed by this plugin."
-  },
-  {
-    test: (m) => /^(orders|purchases|externaltransactions)\./.test(m.id) && m.method !== "GET",
-    reason: "Refunds, cancellations and other actions on customer purchases are never changed by this plugin."
-  }
-];
-var TIER1 = [];
-function classify(method) {
-  for (const b of BLOCKED) {
-    if (b.test(method)) return { tier: 3, reason: b.reason };
-  }
-  for (const r of TIER1) {
-    if (r.id === method.id) return { tier: 1, reason: r.reason };
-  }
-  if (method.id === "reviews.reply") return { tier: 2, reason: "a public reply, visible to everyone on Google Play" };
-  if (method.id.startsWith("edits.listings.") || method.id.startsWith("edits.images.")) {
-    return { tier: 2, reason: "store listing content is public on Google Play as soon as it is committed" };
-  }
-  if (method.id.startsWith("edits.tracks.")) return { tier: 2, reason: "a track change reaches testers or real users (most take effect as soon as they are committed)" };
-  if (method.id.startsWith("monetization.")) return { tier: 2, reason: "this affects subscriptions or what customers pay" };
-  return { tier: 2, reason: "changes to your Google Play app need your confirmation (most take effect as soon as they are committed)" };
-}
-
-// writes.js
 var MAX_BODY_CHARS = 1e5;
 var MAX_CHANGES = 10;
 var TicketStore = class {
@@ -36982,6 +37168,7 @@ async function prepareChange({ changes, deps }) {
   if (scopedCount === 0 && resolved.length > 1) throw new Error("Direct (non-edit) changes must be prepared one at a time.");
   const verdicts = resolved.map((r) => classify(r.method));
   const worst = Math.max(...verdicts.map((v) => v.tier));
+  const sensitive = verdicts.some((v) => v.sensitive);
   const operations = resolved.map((r) => ({
     methodId: r.method.id,
     httpMethod: r.method.method,
@@ -37001,19 +37188,20 @@ async function prepareChange({ changes, deps }) {
       }
       try {
         const values = { ...r.pathValues, ...r.editScoped ? { editId } : {} };
-        const path6 = fillPath(sib.path, values, sib.params.filter((p) => p.reserved).map((p) => p.name));
-        out.push({ before: await deps.get(path6, {}) });
+        const path7 = fillPath(sib.path, values, sib.params.filter((p) => p.reserved).map((p) => p.name));
+        out.push({ before: await deps.get(path7, {}) });
       } catch (err) {
         out.push({ before: null, note: `could not read the current state: ${err.message}` });
       }
     }
     return out;
   });
-  const ticket = deps.store.create({ resolved, tier: worst, pkg, editScoped: scopedCount > 0, befores: befores.map((b) => b.before) });
+  const ticket = deps.store.create({ resolved, tier: worst, sensitive, pkg, editScoped: scopedCount > 0, befores: befores.map((b) => b.before) });
   return {
     allowed: true,
     tier: worst,
-    tierReason: verdicts.find((v) => v.tier === worst).reason,
+    tierReason: (verdicts.find((v) => v.sensitive) || verdicts.find((v) => v.tier === worst)).reason,
+    sensitive: sensitive || void 0,
     ticket: ticket.id,
     expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
     app: pkg,
@@ -37025,10 +37213,27 @@ async function prepareChange({ changes, deps }) {
       beforeNote: befores[i].note,
       requestBody: r.body
     })),
-    nextStep: worst === 1 ? "Low risk. Apply with play_apply_safe_change (or play_apply_change)." : 'Show this preview to the owner in plain English and wait for their explicit "yes", then apply with play_apply_change.'
+    nextStep: nextStepFor(worst, sensitive)
   };
 }
-async function applyChange({ ticketId, requireTier1 = false, deps }) {
+function nextStepFor(tier, sensitive) {
+  if (sensitive) {
+    return 'CRITICAL change. Show this preview to the owner in plain English, say plainly what could go wrong, and wait for their explicit "yes". Then apply with play_apply_sensitive_change (play_apply_change refuses it).';
+  }
+  return tier === 1 ? "Low risk. Apply with play_apply_safe_change (or play_apply_change)." : 'Show this preview to the owner in plain English and wait for their explicit "yes", then apply with play_apply_change.';
+}
+function checkApplyTool(payload, { requireTier1 = false, sensitiveTool = false } = {}) {
+  if (payload.sensitive && !sensitiveTool) {
+    throw new Error("This is a CRITICAL change (users, signing or refunds). It can only be applied with play_apply_sensitive_change, after the owner says yes.");
+  }
+  if (!payload.sensitive && sensitiveTool) {
+    throw new Error("play_apply_sensitive_change only applies critical changes. Use play_apply_change (or play_apply_safe_change) for this ticket.");
+  }
+  if (requireTier1 && payload.tier !== 1) {
+    throw new Error("This ticket is not low-risk (Tier 2). It must be applied with play_apply_change so the owner is asked first.");
+  }
+}
+async function applyChange({ ticketId, requireTier1 = false, sensitiveTool = false, deps }) {
   if (!deps.writesEnabled()) {
     throw new Error(
       'Writes are switched off (kill switch). To allow changes, set "writesEnabled": true in the plugin config file. Previews still work.'
@@ -37036,15 +37241,16 @@ async function applyChange({ ticketId, requireTier1 = false, deps }) {
   }
   const ticket = deps.store.peek(ticketId);
   const p = ticket.payload;
-  if (requireTier1 && p.tier !== 1) {
-    throw new Error("This ticket is not low-risk (Tier 2). It must be applied with play_apply_change so the owner is asked first.");
-  }
+  checkApplyTool(p, { requireTier1, sensitiveTool });
   if (p.kind === "images") {
+    if (!currentFeatures().listing) throw new Error('The "listing" feature was switched off since the preview, so this upload is refused.');
     deps.store.markUsed(ticketId);
     return deps.runImages(p);
   }
-  const worst = Math.max(...p.resolved.map((r) => classify(r.method).tier));
-  if (worst === 3) throw new Error("Blocked: this change is no longer allowed.");
+  const now = p.resolved.map((r) => classify(r.method));
+  const worst = Math.max(...now.map((v) => v.tier));
+  if (worst === 3) throw new Error(`Blocked: ${now.find((v) => v.tier === 3).reason}`);
+  if (now.some((v) => v.sensitive) !== Boolean(p.sensitive)) throw new Error("The rules changed since the preview. Prepare the change again.");
   if (worst > p.tier) throw new Error("The rules changed since the preview. Prepare the change again.");
   deps.store.markUsed(ticketId);
   const pkg = p.pkg;
@@ -37057,9 +37263,9 @@ async function applyChange({ ticketId, requireTier1 = false, deps }) {
   const results = [];
   try {
     for (const r of p.resolved) {
-      const path6 = fillPath(r.method.path, { ...r.pathValues, editId: edit.id }, r.reserved);
+      const path7 = fillPath(r.method.path, { ...r.pathValues, editId: edit.id }, r.reserved);
       try {
-        results.push({ methodId: r.method.id, response: await deps.send(r.method.method, path6, r.query, r.body) });
+        results.push({ methodId: r.method.id, response: await deps.send(r.method.method, path7, r.query, r.body) });
       } catch (err) {
         throw new Error(`Change ${results.length + 1} of ${p.resolved.length} (${r.method.id}) failed: ${err.message}. Nothing was committed.`);
       }
@@ -37074,21 +37280,21 @@ async function applyChange({ ticketId, requireTier1 = false, deps }) {
 }
 
 // monitor.js
-import fs4 from "node:fs";
+import fs5 from "node:fs";
 import os3 from "node:os";
-import path4 from "node:path";
-var stateDir = () => process.env.CLAUDE_PLUGINS_STATE_DIR || path4.join(os3.homedir(), ".claude-plugins", "state");
-var stateFile = (name) => path4.join(stateDir(), `${name}.json`);
+import path5 from "node:path";
+var stateDir = () => process.env.CLAUDE_PLUGINS_STATE_DIR || path5.join(os3.homedir(), ".claude-plugins", "state");
+var stateFile = (name) => path5.join(stateDir(), `${name}.json`);
 function loadState(name) {
   try {
-    return JSON.parse(fs4.readFileSync(stateFile(name), "utf8"));
+    return JSON.parse(fs5.readFileSync(stateFile(name), "utf8"));
   } catch {
     return null;
   }
 }
 function saveState(name, value) {
-  fs4.mkdirSync(stateDir(), { recursive: true });
-  fs4.writeFileSync(stateFile(name), JSON.stringify(value, null, 1));
+  fs5.mkdirSync(stateDir(), { recursive: true });
+  fs5.writeFileSync(stateFile(name), JSON.stringify(value, null, 1));
 }
 var pct = (r) => r.status === "completed" ? 100 : r.userFraction !== void 0 ? Math.round(Number(r.userFraction) * 1e4) / 100 : null;
 function snapshotFromGoogle({ packageName: packageName2, tracks, reviews }) {
@@ -37219,8 +37425,8 @@ async function prepareEditListing(deps, { packageName: packageName2, language = 
 
 // images.js
 import crypto3 from "node:crypto";
-import fs5 from "node:fs";
-import path5 from "node:path";
+import fs6 from "node:fs";
+import path6 from "node:path";
 var APP = "/androidpublisher/v3/applications";
 var LANG = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
 var IMAGE_TYPES = {
@@ -37252,30 +37458,30 @@ function imageSize(buf) {
   return null;
 }
 function inspectImage(p, rule, imageType) {
-  if (typeof p !== "string" || !path5.isAbsolute(p)) throw new Error(`"${p}" must be a full file path.`);
-  if (!/\.(png|jpe?g)$/i.test(p)) throw new Error(`${path5.basename(p)}: only PNG or JPEG images are accepted.`);
+  if (typeof p !== "string" || !path6.isAbsolute(p)) throw new Error(`"${p}" must be a full file path.`);
+  if (!/\.(png|jpe?g)$/i.test(p)) throw new Error(`${path6.basename(p)}: only PNG or JPEG images are accepted.`);
   let st;
   try {
-    st = fs5.statSync(p);
+    st = fs6.statSync(p);
   } catch {
     throw new Error(`${p} does not exist.`);
   }
   if (!st.isFile() || st.size === 0) throw new Error(`${p} is not a usable file.`);
-  if (st.size > rule.maxBytes) throw new Error(`${path5.basename(p)} is ${(st.size / 1048576).toFixed(1)} MB; ${imageType} images may be at most ${rule.maxBytes / 1048576} MB.`);
-  const buf = fs5.readFileSync(p);
+  if (st.size > rule.maxBytes) throw new Error(`${path6.basename(p)} is ${(st.size / 1048576).toFixed(1)} MB; ${imageType} images may be at most ${rule.maxBytes / 1048576} MB.`);
+  const buf = fs6.readFileSync(p);
   const d = imageSize(buf);
-  if (!d) throw new Error(`${path5.basename(p)} does not look like a valid PNG or JPEG.`);
+  if (!d) throw new Error(`${path6.basename(p)} does not look like a valid PNG or JPEG.`);
   if (rule.exact && (d.width !== rule.exact[0] || d.height !== rule.exact[1])) {
-    throw new Error(`${path5.basename(p)} is ${d.width}x${d.height}; a ${imageType} must be exactly ${rule.exact[0]}x${rule.exact[1]}.`);
+    throw new Error(`${path6.basename(p)} is ${d.width}x${d.height}; a ${imageType} must be exactly ${rule.exact[0]}x${rule.exact[1]}.`);
   }
   if (rule.screenshot) {
     const [lo, hi] = [Math.min(d.width, d.height), Math.max(d.width, d.height)];
-    if (lo < 320 || hi > 3840) throw new Error(`${path5.basename(p)} is ${d.width}x${d.height}; screenshots must be between 320 and 3840 pixels on each side.`);
-    if (hi > lo * 2) throw new Error(`${path5.basename(p)} is ${d.width}x${d.height}; the long side may be at most twice the short side.`);
+    if (lo < 320 || hi > 3840) throw new Error(`${path6.basename(p)} is ${d.width}x${d.height}; screenshots must be between 320 and 3840 pixels on each side.`);
+    if (hi > lo * 2) throw new Error(`${path6.basename(p)} is ${d.width}x${d.height}; the long side may be at most twice the short side.`);
   }
   return {
     path: p,
-    name: path5.basename(p),
+    name: path6.basename(p),
     size: st.size,
     md5: crypto3.createHash("md5").update(buf).digest("hex"),
     width: d.width,
@@ -37284,6 +37490,9 @@ function inspectImage(p, rule, imageType) {
   };
 }
 async function prepareUploadImages(deps, { packageName: packageName2, language = "en-US", imageType, files }) {
+  if (!currentFeatures().listing) {
+    return { allowed: false, tier: 3, blocked: true, reason: 'The "listing" feature is switched off in your settings. Run /hypercaffium-play:setup to see or change your settings.' };
+  }
   const pkg = packageName2 || deps.defaultPackage();
   if (!pkg || !/^[A-Za-z0-9._]+$/.test(pkg)) throw new Error("A valid packageName is required (or set defaultPackageName in the config file).");
   if (!LANG.test(language)) throw new Error(`"${language}" is not a language code like en-US.`);
@@ -37329,7 +37538,7 @@ async function runImages(payload, deps) {
   try {
     edit = await deps.send("POST", `${APP}/${pkg}/edits`, {}, {});
     for (const f of files) {
-      const buf = fs5.readFileSync(f.path);
+      const buf = fs6.readFileSync(f.path);
       if (buf.length !== f.size || crypto3.createHash("md5").update(buf).digest("hex") !== f.md5) {
         throw new Error(`${f.name} changed on disk since the preview. Prepare again.`);
       }
@@ -37574,6 +37783,9 @@ var PLUGIN = "google-play-console";
   const tz = loadConfig().timezone;
   if (tz && !process.env.HYPERCAFFIUM_TIMEZONE) process.env.HYPERCAFFIUM_TIMEZONE = tz;
 }
+setFeatureSource(() => loadConfig().features);
+var STARTUP_FEATURES = currentFeatures();
+var SETUP_SCRIPT = /[\\/]dist[\\/][^\\/]+$/.test(fileURLToPath2(import.meta.url)) ? fileURLToPath2(new URL("./setup.mjs", import.meta.url)) : fileURLToPath2(new URL("./dist/setup.mjs", import.meta.url));
 async function playSend(method, pathname, query = {}, body) {
   assertWriteAllowed(method, pathname);
   const url2 = new URL(pathname, API_ORIGIN);
@@ -37636,7 +37848,7 @@ var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 var packageName = external_exports.string().optional().describe("Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.");
-var server = new McpServer({ name: "hypercaffium-play", version: "0.7.1" });
+var server = new McpServer({ name: "hypercaffium-play", version: "0.9.0" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();
@@ -37649,6 +37861,9 @@ function readTool(name, description, inputSchema, handler) {
       return fail(err);
     }
   });
+}
+function featureTool(feature, ...args) {
+  if (STARTUP_FEATURES[feature]) readTool(...args);
 }
 readTool(
   "play_check_setup",
@@ -37666,6 +37881,8 @@ readTool(
       packageName: pkg,
       appDetails: details,
       writesEnabled: cfg.writesEnabled,
+      featuresChosen: cfg.configured,
+      featuresNote: cfg.configured ? "See play_settings for the feature switches." : "Feature switches are at their defaults. The owner can choose them with /hypercaffium-play:setup.",
       writesNote: cfg.writesEnabled ? "Writes are ON: changes need play_prepare_change then play_apply_change." : 'Writes are OFF (kill switch). Previews still work. Set "writesEnabled": true in the config file to allow changes.'
     };
   }
@@ -37827,14 +38044,14 @@ readTool(
     return { ...preview, writesEnabled: loadConfig().writesEnabled };
   }
 );
-function registerApply(name, description, requireTier1, annotations) {
+function registerApply(name, description, requireTier1, annotations, sensitiveTool = false) {
   server.registerTool(
     name,
     { description, inputSchema: { ticket: external_exports.string().describe("The ticket from play_prepare_change") }, annotations },
     async ({ ticket }) => {
       const started = Date.now();
       try {
-        const out = await applyChange({ ticketId: ticket, requireTier1, deps: writeDeps });
+        const out = await applyChange({ ticketId: ticket, requireTier1, sensitiveTool, deps: writeDeps });
         audit(PLUGIN, {
           tool: name,
           kind: "write",
@@ -37844,6 +38061,7 @@ function registerApply(name, description, requireTier1, annotations) {
           app: out.app,
           tier: out.tier,
           committed: out.committed,
+          sensitive: sensitiveTool || void 0,
           methods: out.results?.map((r) => r.methodId),
           beforeJson: JSON.stringify(out.before ?? null).slice(0, 4e3),
           afterJson: JSON.stringify(out.results ?? null).slice(0, 4e3)
@@ -37868,8 +38086,66 @@ registerApply(
   true,
   { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
 );
-var notesSchema = external_exports.array(external_exports.object({ language: external_exports.string().describe("Language code such as en-US"), text: external_exports.string().describe("Release notes, 500 characters max. Use an empty string to CLEAR the note for that language.") })).describe("Release notes per language. Leaving this out keeps the existing notes unchanged.");
+registerApply(
+  "play_apply_sensitive_change",
+  "Applies ONLY critical changes (users and permissions, app signing, refunds and orders), and only ones previewed by a prepare tool that said to use this tool. It is separate from play_apply_change so that allowing that tool can never cover a critical change. Only call this after the owner has read the preview and explicitly said yes.",
+  false,
+  { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  true
+);
+function settingsView() {
+  const cfg = loadConfig();
+  return {
+    settingsFile: CONFIG_PATH,
+    configured: cfg.configured,
+    credentialsProblems: configProblems(cfg),
+    defaultPackageName: cfg.defaultPackageName || null,
+    writesEnabled: cfg.writesEnabled,
+    features: describeFeatures(currentFeatures(), "play"),
+    toolsLoadedFor: Object.keys(STARTUP_FEATURES).filter((k) => STARTUP_FEATURES[k]),
+    criticalSettings: `Critical features can only be switched ON in the terminal menu. Open a terminal window (not this chat) and run: node "${SETUP_SCRIPT}"`,
+    restartNote: "After changing features, restart Claude Code so the dedicated tools match. Switching a feature off takes effect immediately either way."
+  };
+}
 readTool(
+  "play_settings",
+  "Show this plugin's settings: whether credentials are set up, the default app, the writes master switch, and every feature switch grouped by risk level (low, medium, high, critical) with what it covers. Read-only.",
+  {},
+  async () => settingsView()
+);
+server.registerTool(
+  "play_save_settings",
+  {
+    description: "Save this plugin's settings file (used by /hypercaffium-play:setup). Only change what the owner chose in this conversation. Critical features (users, signing, refunds) can be switched OFF here but never ON: that needs the terminal menu. Writes the JSON file safely (paths are escaped for you).",
+    inputSchema: {
+      serviceAccountKeyPath: external_exports.string().optional().describe("Full path to the service-account .json key file"),
+      defaultPackageName: external_exports.string().regex(/^[A-Za-z0-9._]+$/).optional().describe("Android package name, e.g. com.example.app"),
+      timezone: external_exports.string().optional().describe("IANA time zone such as America/New_York"),
+      writesEnabled: external_exports.boolean().optional().describe("Master switch for all changes"),
+      features: external_exports.record(external_exports.string(), external_exports.boolean()).optional().describe('Feature switches to change, e.g. {"uploads": false}')
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+  },
+  async (args) => {
+    try {
+      if (args.serviceAccountKeyPath && !/\.json$/i.test(args.serviceAccountKeyPath)) throw new Error("serviceAccountKeyPath must point to the .json key file.");
+      if (args.timezone) new Intl.DateTimeFormat("en-US", { timeZone: args.timezone });
+      const turnedOnCritical = Object.entries(args.features || {}).filter(([k, v]) => v && isCritical(k) && !currentFeatures()[k]);
+      if (turnedOnCritical.length) {
+        throw new Error(`${turnedOnCritical.map(([k]) => k).join(", ")} can only be switched on in the terminal menu: open a terminal window and run node "${SETUP_SCRIPT}"`);
+      }
+      saveSettings(CONFIG_PATH, args, "play");
+      audit(PLUGIN, { tool: "play_save_settings", kind: "settings", ok: true, changed: Object.keys(args) });
+      return ok({ saved: true, ...settingsView() });
+    } catch (err) {
+      audit(PLUGIN, { tool: "play_save_settings", kind: "settings", ok: false, error: String(err.message || err) });
+      return fail(err);
+    }
+  }
+);
+var notesSchema = external_exports.array(external_exports.object({ language: external_exports.string().describe("Language code such as en-US"), text: external_exports.string().describe("Release notes, 500 characters max. Use an empty string to CLEAR the note for that language.") })).describe("Release notes per language. Leaving this out keeps the existing notes unchanged.");
+featureTool(
+  "releases",
   "play_set_release",
   "Prepare setting a release on a track: which version codes, its status (draft, inProgress staged rollout, completed, halted), rollout fraction and release notes. Checks the version codes were really uploaded. Previews before/after and returns a ticket (Tier 2). Production reaches real users.",
   {
@@ -37883,7 +38159,8 @@ readTool(
   },
   (a) => prepareSetRelease(writeDeps, a)
 );
-readTool(
+featureTool(
+  "releases",
   "play_rollout",
   "Prepare a staged-rollout action on a track (default production): increase to a larger percentage, halt, resume, or complete (everyone). Shows the current and new percentage and returns a ticket (Tier 2).",
   {
@@ -37894,7 +38171,8 @@ readTool(
   },
   (a) => prepareRollout(writeDeps, a)
 );
-readTool(
+featureTool(
+  "releases",
   "play_promote_release",
   "Prepare promoting the current release of one track to another (default internal to production). Production defaults to a 10% staged rollout; release notes are carried over unless you give new ones. Tier 2.",
   {
@@ -37906,19 +38184,22 @@ readTool(
   },
   (a) => preparePromote(writeDeps, a)
 );
-readTool(
+featureTool(
+  "releases",
   "play_set_release_notes",
   "Prepare changing the release notes of a draft, in-progress or halted release on a track (Google does not allow changing a completed release). Shows old and new text per language. Tier 2.",
   { packageName, track: external_exports.string().default("production"), releaseNotes: notesSchema },
   (a) => prepareReleaseNotes(writeDeps, a)
 );
-readTool(
+featureTool(
+  "reviews",
   "play_reply_to_review",
   "Prepare a PUBLIC reply to a Google Play review (350 characters max). Shows the review and any existing reply that would be replaced, and returns a ticket (Tier 2, needs the owner's explicit yes). Needs the Reply to reviews permission.",
   { packageName, reviewId: external_exports.string().describe("Review id from play_list_reviews"), text: external_exports.string() },
   (a) => prepareReplyToReview(writeDeps, a)
 );
-readTool(
+featureTool(
+  "listing",
   "play_edit_listing",
   "Prepare editing the store listing text for one language: title (30), shortDescription (80), fullDescription (4000), video URL. Shows before and after and returns a ticket (Tier 2: it is public as soon as it is committed). Needs the Manage store presence permission.",
   {
@@ -37931,7 +38212,8 @@ readTool(
   },
   ({ packageName: p, language, ...fields }) => prepareEditListing(writeDeps, { packageName: p, language, fields })
 );
-readTool(
+featureTool(
+  "listing",
   "play_upload_images",
   "Prepare uploading listing images (icon, featureGraphic, phoneScreenshots, sevenInchScreenshots, tenInchScreenshots, tvBanner, tvScreenshots, wearScreenshots) from local PNG or JPEG files. Validates sizes against Google's rules, adds only (never deletes), and commits all uploads together or not at all. Tier 2. Needs the Manage store presence permission.",
   {
@@ -37946,7 +38228,7 @@ readTool(
   "play_subscription_overview",
   "List the app's Google Play subscriptions: product ids, titles, base plans (state, billing period, number of regions). Read-only. Needs the Manage orders and subscriptions permission. Edits go through play_prepare_change.",
   { packageName },
-  async ({ packageName: p }) => subscriptionOverview((path6, q) => playRequest("GET", path6, q), resolvePackage(p))
+  async ({ packageName: p }) => subscriptionOverview((path7, q) => playRequest("GET", path7, q), resolvePackage(p))
 );
 readTool(
   "play_check_changes",

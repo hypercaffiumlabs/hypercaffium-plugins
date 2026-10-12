@@ -160,6 +160,10 @@ function loadConfig() {
     defaultPackageName: process.env.PLAY_PACKAGE_NAME || file.defaultPackageName || "",
     writesEnabled: rawWrites === true || /^(1|true|yes)$/i.test(String(rawWrites || "")),
     timezone: process.env.HYPERCAFFIUM_TIMEZONE || file.timezone || "",
+    // Feature switches (see shared/features.js); missing ones fall back to their defaults.
+    features: file.features && typeof file.features === "object" ? file.features : {},
+    // True once the setup menu has saved settings at least once.
+    configured: Boolean(file.features),
     fileError
   };
 }
@@ -220,6 +224,7 @@ var COMMIT = new RegExp(`^${V3}applications/${PKG}/edits/${EDIT_ID}:commit$`);
 var UPLOAD_IMAGE = new RegExp(
   `^/upload${V3}applications/${PKG}/edits/${EDIT_ID}/listings/[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*/(icon|featureGraphic|phoneScreenshots|sevenInchScreenshots|tenInchScreenshots|tvBanner|tvScreenshots|wearScreenshots)$`
 );
+var DEV_USERS = new RegExp(`^${V3}developers/[0-9]+/users(/[^/]+(/grants(/[^/]+)?)?)?$`);
 function assertAllowed(method, pathname) {
   if (pathname.split("/").some((seg) => seg === "." || seg === ".." || seg.toLowerCase() === "%2e" || seg.toLowerCase() === "%2e%2e")) {
     throw new Error(`Blocked by safety guard: ${method} ${pathname} contains a dot-segment.`);

@@ -5,6 +5,7 @@
 // flow: play_prepare_change (preview + one-time ticket) then play_apply_change /
 // play_apply_safe_change (executes exactly that ticket), and only when the kill switch
 // ("writesEnabled") is on. Everything is recorded in the audit log.
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -16,6 +17,8 @@ import { fillPath, getMethod, loadSpec, searchMethods, splitParams } from './spe
 import { buildPlayStatus } from './status.js';
 import { limitText, toLocalTime } from './util.js';
 import { applyChange, prepareChange, TicketStore } from './writes.js';
+import { currentFeatures, setFeatureSource } from './rules.js';
+import { describeFeatures, isCritical, saveSettings } from '../../shared/features.js';
 import { googleCheckChanges } from './monitor.js';
 import { prepareEditListing, prepareReplyToReview } from './listing.js';
 import { prepareUploadImages, runImages } from './images.js';
@@ -29,6 +32,16 @@ const PLUGIN = 'google-play-console';
   const tz = loadConfig().timezone;
   if (tz && !process.env.HYPERCAFFIUM_TIMEZONE) process.env.HYPERCAFFIUM_TIMEZONE = tz;
 }
+
+// Feature switches are re-read from the settings file on every check, so switching one OFF takes
+// effect at once. Which dedicated tools exist is decided here, at startup (a restart shows new ones).
+setFeatureSource(() => loadConfig().features);
+const STARTUP_FEATURES = currentFeatures();
+
+// The terminal setup menu sits next to this server file once built (server/dist/setup.mjs).
+const SETUP_SCRIPT = /[\\/]dist[\\/][^\\/]+$/.test(fileURLToPath(import.meta.url))
+  ? fileURLToPath(new URL('./setup.mjs', import.meta.url))
+  : fileURLToPath(new URL('./dist/setup.mjs', import.meta.url));
 
 // The ONLY function in this server that can change anything. It is referenced solely by the
 // apply path (writeDeps.send below), after a valid, unexpired, single-use ticket has been checked,
@@ -104,7 +117,7 @@ const packageName = z
   .optional()
   .describe('Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.');
 
-const server = new McpServer({ name: 'hypercaffium-play', version: '0.7.1' });
+const server = new McpServer({ name: 'hypercaffium-play', version: '0.9.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -119,6 +132,11 @@ function readTool(name, description, inputSchema, handler) {
       return fail(err);
     }
   });
+}
+
+// A dedicated change tool exists only while its feature is switched on (decided at startup).
+function featureTool(feature, ...args) {
+  if (STARTUP_FEATURES[feature]) readTool(...args);
 }
 
 // ---- setup + dedicated read tools -----------------------------------------
@@ -139,6 +157,8 @@ readTool(
       packageName: pkg,
       appDetails: details,
       writesEnabled: cfg.writesEnabled,
+      featuresChosen: cfg.configured,
+      featuresNote: cfg.configured ? 'See play_settings for the feature switches.' : 'Feature switches are at their defaults. The owner can choose them with /hypercaffium-play:setup.',
       writesNote: cfg.writesEnabled
         ? 'Writes are ON: changes need play_prepare_change then play_apply_change.'
         : 'Writes are OFF (kill switch). Previews still work. Set "writesEnabled": true in the config file to allow changes.',
@@ -322,14 +342,14 @@ readTool(
   },
 );
 
-function registerApply(name, description, requireTier1, annotations) {
+function registerApply(name, description, requireTier1, annotations, sensitiveTool = false) {
   server.registerTool(
     name,
     { description, inputSchema: { ticket: z.string().describe('The ticket from play_prepare_change') }, annotations },
     async ({ ticket }) => {
       const started = Date.now();
       try {
-        const out = await applyChange({ ticketId: ticket, requireTier1, deps: writeDeps });
+        const out = await applyChange({ ticketId: ticket, requireTier1, sensitiveTool, deps: writeDeps });
         audit(PLUGIN, {
           tool: name,
           kind: 'write',
@@ -339,6 +359,7 @@ function registerApply(name, description, requireTier1, annotations) {
           app: out.app,
           tier: out.tier,
           committed: out.committed,
+          sensitive: sensitiveTool || undefined,
           methods: out.results?.map((r) => r.methodId),
           beforeJson: JSON.stringify(out.before ?? null).slice(0, 4000),
           afterJson: JSON.stringify(out.results ?? null).slice(0, 4000),
@@ -366,13 +387,77 @@ registerApply(
   { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
 );
 
+registerApply(
+  'play_apply_sensitive_change',
+  'Applies ONLY critical changes (users and permissions, app signing, refunds and orders), and only ones previewed by a prepare tool that said to use this tool. It is separate from play_apply_change so that allowing that tool can never cover a critical change. Only call this after the owner has read the preview and explicitly said yes.',
+  false,
+  { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  true,
+);
+
+// ---- settings (the in-chat part of /hypercaffium-play:setup) ----------------------
+
+function settingsView() {
+  const cfg = loadConfig();
+  return {
+    settingsFile: CONFIG_PATH,
+    configured: cfg.configured,
+    credentialsProblems: configProblems(cfg),
+    defaultPackageName: cfg.defaultPackageName || null,
+    writesEnabled: cfg.writesEnabled,
+    features: describeFeatures(currentFeatures(), 'play'),
+    toolsLoadedFor: Object.keys(STARTUP_FEATURES).filter((k) => STARTUP_FEATURES[k]),
+    criticalSettings: `Critical features can only be switched ON in the terminal menu. Open a terminal window (not this chat) and run: node "${SETUP_SCRIPT}"`,
+    restartNote: 'After changing features, restart Claude Code so the dedicated tools match. Switching a feature off takes effect immediately either way.',
+  };
+}
+
+readTool(
+  'play_settings',
+  "Show this plugin's settings: whether credentials are set up, the default app, the writes master switch, and every feature switch grouped by risk level (low, medium, high, critical) with what it covers. Read-only.",
+  {},
+  async () => settingsView(),
+);
+
+server.registerTool(
+  'play_save_settings',
+  {
+    description:
+      "Save this plugin's settings file (used by /hypercaffium-play:setup). Only change what the owner chose in this conversation. Critical features (users, signing, refunds) can be switched OFF here but never ON: that needs the terminal menu. Writes the JSON file safely (paths are escaped for you).",
+    inputSchema: {
+      serviceAccountKeyPath: z.string().optional().describe('Full path to the service-account .json key file'),
+      defaultPackageName: z.string().regex(/^[A-Za-z0-9._]+$/).optional().describe('Android package name, e.g. com.example.app'),
+      timezone: z.string().optional().describe('IANA time zone such as America/New_York'),
+      writesEnabled: z.boolean().optional().describe('Master switch for all changes'),
+      features: z.record(z.string(), z.boolean()).optional().describe('Feature switches to change, e.g. {"uploads": false}'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  },
+  async (args) => {
+    try {
+      if (args.serviceAccountKeyPath && !/\.json$/i.test(args.serviceAccountKeyPath)) throw new Error('serviceAccountKeyPath must point to the .json key file.');
+      if (args.timezone) new Intl.DateTimeFormat('en-US', { timeZone: args.timezone });
+      const turnedOnCritical = Object.entries(args.features || {}).filter(([k, v]) => v && isCritical(k) && !currentFeatures()[k]);
+      if (turnedOnCritical.length) {
+        throw new Error(`${turnedOnCritical.map(([k]) => k).join(', ')} can only be switched on in the terminal menu: open a terminal window and run node "${SETUP_SCRIPT}"`);
+      }
+      saveSettings(CONFIG_PATH, args, 'play');
+      audit(PLUGIN, { tool: 'play_save_settings', kind: 'settings', ok: true, changed: Object.keys(args) });
+      return ok({ saved: true, ...settingsView() });
+    } catch (err) {
+      audit(PLUGIN, { tool: 'play_save_settings', kind: 'settings', ok: false, error: String(err.message || err) });
+      return fail(err);
+    }
+  },
+);
+
 // ---- release workflows (previews + tickets; nothing changes until play_apply_change runs) ----
 
 const notesSchema = z
   .array(z.object({ language: z.string().describe('Language code such as en-US'), text: z.string().describe('Release notes, 500 characters max. Use an empty string to CLEAR the note for that language.') }))
   .describe('Release notes per language. Leaving this out keeps the existing notes unchanged.');
 
-readTool(
+featureTool('releases',
   'play_set_release',
   'Prepare setting a release on a track: which version codes, its status (draft, inProgress staged rollout, completed, halted), rollout fraction and release notes. Checks the version codes were really uploaded. Previews before/after and returns a ticket (Tier 2). Production reaches real users.',
   {
@@ -387,7 +472,7 @@ readTool(
   (a) => prepareSetRelease(writeDeps, a),
 );
 
-readTool(
+featureTool('releases',
   'play_rollout',
   'Prepare a staged-rollout action on a track (default production): increase to a larger percentage, halt, resume, or complete (everyone). Shows the current and new percentage and returns a ticket (Tier 2).',
   {
@@ -399,7 +484,7 @@ readTool(
   (a) => prepareRollout(writeDeps, a),
 );
 
-readTool(
+featureTool('releases',
   'play_promote_release',
   'Prepare promoting the current release of one track to another (default internal to production). Production defaults to a 10% staged rollout; release notes are carried over unless you give new ones. Tier 2.',
   {
@@ -412,7 +497,7 @@ readTool(
   (a) => preparePromote(writeDeps, a),
 );
 
-readTool(
+featureTool('releases',
   'play_set_release_notes',
   'Prepare changing the release notes of a draft, in-progress or halted release on a track (Google does not allow changing a completed release). Shows old and new text per language. Tier 2.',
   { packageName, track: z.string().default('production'), releaseNotes: notesSchema },
@@ -421,14 +506,14 @@ readTool(
 
 // ---- reviews, listing, images, subscriptions -----------------------------------------
 
-readTool(
+featureTool('reviews',
   "play_reply_to_review",
   "Prepare a PUBLIC reply to a Google Play review (350 characters max). Shows the review and any existing reply that would be replaced, and returns a ticket (Tier 2, needs the owner's explicit yes). Needs the Reply to reviews permission.",
   { packageName, reviewId: z.string().describe("Review id from play_list_reviews"), text: z.string() },
   (a) => prepareReplyToReview(writeDeps, a),
 );
 
-readTool(
+featureTool('listing',
   "play_edit_listing",
   "Prepare editing the store listing text for one language: title (30), shortDescription (80), fullDescription (4000), video URL. Shows before and after and returns a ticket (Tier 2: it is public as soon as it is committed). Needs the Manage store presence permission.",
   {
@@ -442,7 +527,7 @@ readTool(
   ({ packageName: p, language, ...fields }) => prepareEditListing(writeDeps, { packageName: p, language, fields }),
 );
 
-readTool(
+featureTool('listing',
   "play_upload_images",
   "Prepare uploading listing images (icon, featureGraphic, phoneScreenshots, sevenInchScreenshots, tenInchScreenshots, tvBanner, tvScreenshots, wearScreenshots) from local PNG or JPEG files. Validates sizes against Google's rules, adds only (never deletes), and commits all uploads together or not at all. Tier 2. Needs the Manage store presence permission.",
   {
