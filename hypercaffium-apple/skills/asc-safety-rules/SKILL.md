@@ -1,7 +1,7 @@
 ---
 name: asc-safety-rules
 description: Use when working with App Store Connect, TestFlight, iOS build status, release notes, listing text, screenshots, submitting for App Review, phased release, subscriptions and prices, customer reviews, or App Review details. Explains the asc_ tools and the mandatory prepare-then-apply protocol for any change.
-version: 0.12.0
+version: 0.13.0
 ---
 
 # App Store Connect: how to use these tools safely
@@ -65,6 +65,16 @@ The owner chooses which areas this plugin may change, grouped by risk: Low (test
 - If a change is refused because its feature is off, tell the owner which switch it is and that `/hypercaffium-apple:setup` changes it. Do not look for another way.
 - **Critical** changes are previewed like any other, but can only be applied with `asc_apply_sensitive_change`. Before applying, say plainly what could go wrong (for signing: it can break builds made by EAS or Xcode).
 - Never switch a feature on, never call `asc_save_settings` unless the owner is choosing settings right now, and never edit the settings file directly. Critical features can only be switched on by the owner in a terminal menu; `asc_save_settings` refuses it.
+
+### Critical tools (only when the owner switched the area on)
+
+| Goal | Tool |
+|---|---|
+| Who is on the team / signing assets (read) | `asc_team_overview`, `asc_signing_overview` |
+| Invite, change or remove a team member | `asc_invite_user` (fewest roles, this app only by default), `asc_change_user`, `asc_remove_user`. The Account Holder is never changed |
+| Devices, certificates, profiles | `asc_register_device`, `asc_set_device_enabled`, `asc_revoke_certificate`, `asc_delete_profile`. Say plainly that revoking or deleting cannot be undone and can break EAS or Xcode builds |
+
+Apply these only with `asc_apply_sensitive_change`, after reading the warnings to the owner and getting an explicit yes for that exact change.
 
 ### Submitting: what to say
 

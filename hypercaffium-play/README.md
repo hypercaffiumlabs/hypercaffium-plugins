@@ -14,6 +14,7 @@ Every change is **previewed, confirmed and logged**.
 | **Releases** | `play_set_release`, `play_rollout`, `play_promote_release`, `play_set_release_notes` |
 | **Listing** | `play_edit_listing`, `play_upload_images`, `play_replace_images` |
 | **Reviews** | `play_list_reviews`, `play_reply_to_review` |
+| **Team and refunds (Critical, off by default)** | `play_team_overview`, `play_order_lookup`, `play_subscription_lookup` (read); `play_invite_user`, `play_set_user_app_permissions`, `play_remove_user`, `play_refund_order`, `play_revoke_subscription` (applied only with `play_apply_sensitive_change`). Team tools need `developerId` in the settings. App signing key rotation goes through `play_prepare_change` |
 | **App bundles** | `play_upload_bundle` (an .aab, optionally with mapping.txt, onto a track; only internal, alpha and beta can go live straight from an upload; on any other track (production included) it is a draft). Only if you do not use EAS or Gradle uploads |
 | **Testers** | `play_list_testers`, `play_set_testers` (Google Groups on testing tracks) |
 | **Subscriptions** | `play_subscription_overview`, `play_set_subscription_price`, `play_migrate_subscription_prices` |

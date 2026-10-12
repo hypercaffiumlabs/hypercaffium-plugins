@@ -1,7 +1,7 @@
 ---
 name: play-safety-rules
 description: Use when working with Google Play Console, the Play Store, Android release tracks, staged rollouts, app bundles, store listing text and images, review replies, or subscriptions. Explains the play_ tools and the mandatory prepare-then-apply protocol for any change.
-version: 0.12.0
+version: 0.13.0
 ---
 
 # Google Play Console: how to use these tools safely
@@ -51,6 +51,17 @@ The tools check the version code was really uploaded (builds arrive from your ow
 ### App bundles
 
 `play_upload_bundle` uploads an .aab (and optionally mapping.txt) and places it on a track in ONE edit; only internal, alpha and beta can go live straight from an upload; on any other track (production included) it is a draft. Only with the "uploads" switch on; most owners upload with EAS or Gradle, so ask before suggesting it.
+
+### Critical tools (only when the owner switched the area on)
+
+| Goal | Tool |
+|---|---|
+| Team, orders, subscriptions (read) | `play_team_overview` (needs `developerId`), `play_order_lookup`, `play_subscription_lookup` |
+| Team members | `play_invite_user` (this app only, listed permissions only), `play_set_user_app_permissions`, `play_remove_user` |
+| Customer money | `play_refund_order` (optionally revoking access), `play_revoke_subscription` (ends now, full or prorated refund) |
+| App signing key rotation | `play_prepare_change` with `appsigning.rotateAppSigningKey` (irreversible; only on the owner's explicit, specific request) |
+
+Apply these only with `play_apply_sensitive_change`, after reading the customer impact or warnings to the owner and getting an explicit yes for that exact change. Never refund or revoke on a guess: get the order id or purchase token from the owner.
 
 ### Testers
 

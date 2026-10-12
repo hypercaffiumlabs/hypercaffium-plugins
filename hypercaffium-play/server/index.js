@@ -26,6 +26,17 @@ import { subscriptionOverview } from './subscriptions.js';
 import { prepareMigratePrices, prepareSetSubscriptionPrice } from './pricing.js';
 import { listTesters, prepareSetTesters } from './testers.js';
 import { prepareUploadBundle, runBundle } from './bundles.js';
+import {
+  APP_PERMISSIONS,
+  lookupOrder,
+  lookupSubscription,
+  prepareInviteUser,
+  prepareRefundOrder,
+  prepareRemoveUser,
+  prepareRevokeSubscription,
+  prepareSetUserAppPermissions,
+  teamOverview,
+} from './critical.js';
 import { prepareReleaseNotes, preparePromote, prepareRollout, prepareSetRelease } from './release.js';
 
 const PLUGIN = 'google-play-console';
@@ -77,6 +88,7 @@ const writeDeps = {
   get: (p, q) => playRequest('GET', p, q),
   send: playSend,
   defaultPackage: () => loadConfig().defaultPackageName,
+  developerId: () => loadConfig().developerId,
   writesEnabled: () => loadConfig().writesEnabled,
   // Reads for the "before" picture; opens a throwaway edit only when needed.
   withReadContext: (pkg, needsEdit, fn) => (needsEdit ? withTemporaryEdit(pkg, fn) : fn(null)),
@@ -144,7 +156,7 @@ const packageName = z
   .optional()
   .describe('Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.');
 
-const server = new McpServer({ name: 'hypercaffium-play', version: '0.12.2' });
+const server = new McpServer({ name: 'hypercaffium-play', version: '0.13.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -431,6 +443,7 @@ function settingsView() {
     configured: cfg.configured,
     credentialsProblems: configProblems(cfg),
     defaultPackageName: cfg.defaultPackageName || null,
+    developerId: cfg.developerId || null,
     writesEnabled: cfg.writesEnabled,
     features: describeFeatures(currentFeatures(), 'play'),
     toolsLoadedFor: Object.keys(STARTUP_FEATURES).filter((k) => STARTUP_FEATURES[k]),
@@ -454,6 +467,7 @@ server.registerTool(
     inputSchema: {
       serviceAccountKeyPath: z.string().optional().describe('Full path to the service-account .json key file'),
       defaultPackageName: z.string().regex(/^[A-Za-z0-9._]+$/).optional().describe('Android package name, e.g. com.example.app'),
+      developerId: z.string().regex(/^[0-9]{5,25}$/).optional().describe('Play developer account ID (only for team tools): the number after /developers/ in the Play Console web address'),
       timezone: z.string().optional().describe('IANA time zone such as America/New_York'),
       writesEnabled: z.boolean().optional().describe('Master switch for all changes'),
       features: z.record(z.string(), z.boolean()).optional().describe('Feature switches to change, e.g. {"uploads": false}'),
@@ -547,6 +561,70 @@ featureTool(
     releaseNotes: notesSchema.optional(),
   },
   (a) => prepareUploadBundle(writeDeps, a),
+);
+
+// ---- CRITICAL: team members and customer money (switched off unless the owner enabled them) ----
+// Reading is always allowed; every change is sensitive (play_apply_sensitive_change only).
+
+readTool(
+  'play_team_overview',
+  'Who has access to the Google Play developer account: emails, account-wide permissions, and per-app permissions. Read-only. Needs developerId in the settings.',
+  {},
+  () => teamOverview(writeDeps),
+);
+
+readTool(
+  'play_order_lookup',
+  'Look up one Google Play order by its id (GPA....): what was bought, when, the amount and its state. Read-only. Needs the Manage orders and subscriptions permission.',
+  { packageName, orderId: z.string() },
+  (a) => lookupOrder(writeDeps, a),
+);
+
+readTool(
+  'play_subscription_lookup',
+  'Look up one customer subscription by its purchase token: plan, state, renewal and expiry. Read-only.',
+  { packageName, purchaseToken: z.string() },
+  (a) => lookupSubscription(writeDeps, a),
+);
+
+featureTool(
+  'users',
+  'play_invite_user',
+  'CRITICAL. Prepare inviting someone to the Google Play developer account with access to THIS app only and the listed permissions (no account-wide permissions). Warns about powerful ones. Apply with play_apply_sensitive_change.',
+  { packageName, email: z.string(), appPermissions: z.array(z.enum(APP_PERMISSIONS)).min(1) },
+  (a) => prepareInviteUser(writeDeps, a),
+);
+
+featureTool(
+  'users',
+  'play_set_user_app_permissions',
+  "CRITICAL. Prepare replacing a team member's permissions for this app (shows now and after). Apply with play_apply_sensitive_change.",
+  { packageName, email: z.string(), appPermissions: z.array(z.enum(APP_PERMISSIONS)).min(1) },
+  (a) => prepareSetUserAppPermissions(writeDeps, a),
+);
+
+featureTool(
+  'users',
+  'play_remove_user',
+  'CRITICAL. Prepare removing someone from the Google Play developer account (they lose access to every app at once). Apply with play_apply_sensitive_change.',
+  { email: z.string() },
+  (a) => prepareRemoveUser(writeDeps, a),
+);
+
+featureTool(
+  'refunds',
+  'play_refund_order',
+  "CRITICAL. Prepare refunding one order, optionally also revoking the customer's access. Cannot be undone; the preview spells out what the customer gets and loses. Apply with play_apply_sensitive_change.",
+  { packageName, orderId: z.string().describe('GPA.xxxx-xxxx-xxxx-xxxxx'), revokeAccess: z.boolean().default(false) },
+  (a) => prepareRefundOrder(writeDeps, a),
+);
+
+featureTool(
+  'refunds',
+  'play_revoke_subscription',
+  'CRITICAL. Prepare ending a customer subscription NOW with a full or prorated refund. Cannot be undone. Apply with play_apply_sensitive_change.',
+  { packageName, purchaseToken: z.string(), refund: z.enum(['full', 'prorated']).default('full') },
+  (a) => prepareRevokeSubscription(writeDeps, a),
 );
 
 // ---- testers ------------------------------------------------------------------------

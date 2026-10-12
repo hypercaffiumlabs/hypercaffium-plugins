@@ -67,9 +67,12 @@ function resolveChange(raw, defaultPackage) {
     throw new Error(`${m.id} uploads a file. File uploads (bundles, images) arrive in Phase 3 with their own workflow.`);
   }
   const { pathValues, query, pathNames } = splitParams(m, raw.params || {});
-  if (pathNames.includes('packageName') && !pathValues.packageName) pathValues.packageName = defaultPackage;
-  if (!pathValues.packageName || !/^[A-Za-z0-9._]+$/.test(pathValues.packageName)) {
-    throw new Error('A valid packageName is required (or set defaultPackageName in the config file).');
+  // Most methods act on one app; account-level ones (team members) take a developer path instead.
+  if (pathNames.includes('packageName')) {
+    if (!pathValues.packageName) pathValues.packageName = defaultPackage;
+    if (!pathValues.packageName || !/^[A-Za-z0-9._]+$/.test(pathValues.packageName)) {
+      throw new Error('A valid packageName is required (or set defaultPackageName in the config file).');
+    }
   }
   if (m.hasBody && (raw.body === undefined || raw.body === null)) throw new Error(`${m.id} needs a body.`);
   if (raw.body !== undefined && raw.body !== null) {
@@ -85,6 +88,10 @@ function resolveChange(raw, defaultPackage) {
     reserved: m.params.filter((p) => p.reserved).map((p) => p.name),
   };
 }
+
+// A comparable fingerprint of a track's releases (status, version codes, rollout fraction).
+const trackPrint = (track) =>
+  JSON.stringify(((track && track.releases) || []).map((r) => [r.status, (r.versionCodes || []).map(String).sort(), r.userFraction ?? null]));
 
 // ---- prepare ---------------------------------------------------------------
 
@@ -238,6 +245,16 @@ export async function applyChange({ ticketId, requireTier1 = false, sensitiveToo
   const edit = await deps.send('POST', `/androidpublisher/v3/applications/${pkg}/edits`, {}, {});
   const results = [];
   try {
+    // A track change replaces the track's whole release list, so it must start from exactly what the
+    // owner saw. If a rollout or release happened since the preview, stop instead of overwriting it.
+    for (const [i, r] of p.resolved.entries()) {
+      if (!/^edits\.tracks\.(update|patch)$/.test(r.method.id) || !p.befores?.[i]) continue;
+      const path = fillPath(r.method.path, { ...r.pathValues, editId: edit.id }, r.reserved);
+      const now = await deps.get(path, {});
+      if (trackPrint(now) !== trackPrint(p.befores[i])) {
+        throw new Error(`The "${r.pathValues.track}" track changed since the preview (a release or rollout happened in the meantime). Nothing was committed; prepare the change again.`);
+      }
+    }
     for (const r of p.resolved) {
       const path = fillPath(r.method.path, { ...r.pathValues, editId: edit.id }, r.reserved);
       try {

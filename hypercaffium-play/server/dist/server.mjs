@@ -29212,8 +29212,8 @@ function currencyCode2(_params) {
   return _stringFormat(ZodCustomStringFormat, "currency_code", currencyCode, _params);
 }
 function hash(alg, params) {
-  const enc2 = params?.enc ?? "hex";
-  const format = `${alg}_${enc2}`;
+  const enc3 = params?.enc ?? "hex";
+  const format = `${alg}_${enc3}`;
   const regex = regexes_exports[format];
   if (!regex)
     throw new Error(`Unrecognized hash format: ${format}`);
@@ -36610,6 +36610,8 @@ function loadConfig() {
   return {
     serviceAccountKeyPath: process.env.PLAY_SA_KEY_PATH || file2.serviceAccountKeyPath || "",
     defaultPackageName: process.env.PLAY_PACKAGE_NAME || file2.defaultPackageName || "",
+    // Only needed for team tools: the number after /developers/ in the Play Console web address.
+    developerId: process.env.PLAY_DEVELOPER_ID || file2.developerId || "",
     writesEnabled: rawWrites === true || /^(1|true|yes)$/i.test(String(rawWrites || "")),
     timezone: process.env.HYPERCAFFIUM_TIMEZONE || file2.timezone || "",
     // Feature switches (see shared/features.js); missing ones fall back to their defaults.
@@ -36840,6 +36842,7 @@ var BLOCKED = [
     reason: "Edits are opened, validated and committed by the plugin itself. Never change them directly."
   }
 ];
+var CRITICAL_DELETES = /* @__PURE__ */ new Set(["users.delete", "grants.delete"]);
 var TIER1 = [];
 function classify(method) {
   const feature = featureFor(method.id);
@@ -36850,6 +36853,7 @@ function classify(method) {
       reason: `The "${feature}" feature is switched off in your settings, so this change is refused. Run /hypercaffium-play:setup to see or change your settings.`
     };
   }
+  if (CRITICAL_DELETES.has(method.id)) return { tier: 2, feature, sensitive: true, reason: criticalReason(feature) };
   for (const b of BLOCKED) {
     if (b.test(method)) return { tier: 3, feature, reason: b.reason };
   }
@@ -36913,7 +36917,7 @@ function assertWriteAllowed(method, pathname, features = currentFeatures()) {
     allowed = true;
   } else if (["POST", "PUT", "PATCH"].includes(method)) {
     allowed = APP_PATH.test(pathname) && !/\/users(\/|$)|\/grants(\/|$)/.test(pathname) || Boolean(features.users) && DEV_USERS.test(pathname);
-  } else if (method === "DELETE") allowed = DELETE_EDIT.test(pathname) || IMAGE_SET.test(pathname);
+  } else if (method === "DELETE") allowed = DELETE_EDIT.test(pathname) || IMAGE_SET.test(pathname) || Boolean(features.users) && DEV_USERS.test(pathname);
   if (!allowed) throw new Error(`Blocked by safety guard: ${method} ${pathname} is not an allowed change.`);
 }
 function assertAllowed(method, pathname) {
@@ -37131,9 +37135,11 @@ function resolveChange(raw, defaultPackage) {
     throw new Error(`${m.id} uploads a file. File uploads (bundles, images) arrive in Phase 3 with their own workflow.`);
   }
   const { pathValues, query, pathNames } = splitParams(m, raw.params || {});
-  if (pathNames.includes("packageName") && !pathValues.packageName) pathValues.packageName = defaultPackage;
-  if (!pathValues.packageName || !/^[A-Za-z0-9._]+$/.test(pathValues.packageName)) {
-    throw new Error("A valid packageName is required (or set defaultPackageName in the config file).");
+  if (pathNames.includes("packageName")) {
+    if (!pathValues.packageName) pathValues.packageName = defaultPackage;
+    if (!pathValues.packageName || !/^[A-Za-z0-9._]+$/.test(pathValues.packageName)) {
+      throw new Error("A valid packageName is required (or set defaultPackageName in the config file).");
+    }
   }
   if (m.hasBody && (raw.body === void 0 || raw.body === null)) throw new Error(`${m.id} needs a body.`);
   if (raw.body !== void 0 && raw.body !== null) {
@@ -37149,6 +37155,7 @@ function resolveChange(raw, defaultPackage) {
     reserved: m.params.filter((p) => p.reserved).map((p) => p.name)
   };
 }
+var trackPrint = (track) => JSON.stringify((track && track.releases || []).map((r) => [r.status, (r.versionCodes || []).map(String).sort(), r.userFraction ?? null]));
 async function prepareChange({ changes, deps }) {
   if (!Array.isArray(changes) || changes.length === 0) throw new Error("Provide at least one change.");
   if (changes.length > MAX_CHANGES) throw new Error(`At most ${MAX_CHANGES} changes per ticket.`);
@@ -37276,6 +37283,14 @@ async function applyChange({ ticketId, requireTier1 = false, sensitiveTool = fal
   const edit = await deps.send("POST", `/androidpublisher/v3/applications/${pkg}/edits`, {}, {});
   const results = [];
   try {
+    for (const [i, r] of p.resolved.entries()) {
+      if (!/^edits\.tracks\.(update|patch)$/.test(r.method.id) || !p.befores?.[i]) continue;
+      const path8 = fillPath(r.method.path, { ...r.pathValues, editId: edit.id }, r.reserved);
+      const now2 = await deps.get(path8, {});
+      if (trackPrint(now2) !== trackPrint(p.befores[i])) {
+        throw new Error(`The "${r.pathValues.track}" track changed since the preview (a release or rollout happened in the meantime). Nothing was committed; prepare the change again.`);
+      }
+    }
     for (const r of p.resolved) {
       const path8 = fillPath(r.method.path, { ...r.pathValues, editId: edit.id }, r.reserved);
       try {
@@ -38181,6 +38196,175 @@ async function runBundle(payload, deps) {
   }
 }
 
+// critical.js
+var V32 = "/androidpublisher/v3";
+var enc2 = encodeURIComponent;
+var off2 = (feature) => currentFeatures()[feature] ? null : {
+  allowed: false,
+  tier: 3,
+  blocked: true,
+  reason: `The critical "${feature}" feature is off. Only the owner can switch it on, in the terminal setup menu (see play_settings for the command).`
+};
+var APP_PERMISSIONS = [
+  "CAN_ACCESS_APP",
+  "CAN_VIEW_NON_FINANCIAL_DATA",
+  "CAN_VIEW_APP_QUALITY",
+  "CAN_REPLY_TO_REVIEWS",
+  "CAN_MANAGE_PUBLIC_LISTING",
+  "CAN_MANAGE_DRAFT_APPS",
+  "CAN_MANAGE_TRACK_USERS",
+  "CAN_MANAGE_TRACK_APKS",
+  "CAN_MANAGE_PUBLIC_APKS",
+  "CAN_MANAGE_APP_CONTENT",
+  "CAN_MANAGE_DEEPLINKS",
+  "CAN_MANAGE_ORDERS",
+  "CAN_VIEW_FINANCIAL_DATA",
+  "CAN_MANAGE_PERMISSIONS"
+];
+var PERMISSION_WARNINGS = {
+  CAN_MANAGE_PERMISSIONS: "CAN_MANAGE_PERMISSIONS lets them change other people's access to this app.",
+  CAN_MANAGE_PUBLIC_APKS: "CAN_MANAGE_PUBLIC_APKS lets them release to production.",
+  CAN_MANAGE_ORDERS: "CAN_MANAGE_ORDERS lets them refund and cancel customer purchases.",
+  CAN_VIEW_FINANCIAL_DATA: "CAN_VIEW_FINANCIAL_DATA shows revenue and payouts."
+};
+function checkPermissions(perms) {
+  if (!Array.isArray(perms) || !perms.length) throw new Error(`appPermissions must list one or more of: ${APP_PERMISSIONS.join(", ")}.`);
+  const bad = perms.filter((p) => !APP_PERMISSIONS.includes(p));
+  if (bad.length) throw new Error(`Unknown permission(s): ${bad.join(", ")}.`);
+  return perms.map((p) => PERMISSION_WARNINGS[p]).filter(Boolean);
+}
+function developer(deps) {
+  const id = deps.developerId();
+  if (!/^[0-9]{5,25}$/.test(id || "")) {
+    throw new Error("Team tools need your Play developer account ID: the long number after /developers/ in the Play Console web address. Save it with play_save_settings (developerId).");
+  }
+  return `developers/${id}`;
+}
+async function teamOverview(deps) {
+  const dev = developer(deps);
+  const body = await deps.get(`${V32}/${dev}/users`, { pageSize: 200 });
+  return {
+    members: (body.users || []).map((u) => ({
+      email: u.email,
+      accessState: u.accessState,
+      accountPermissions: u.developerAccountPermissions || [],
+      apps: (u.grants || []).map((g) => ({ app: g.packageName, permissions: g.appLevelPermissions })),
+      expires: u.expirationTime
+    }))
+  };
+}
+async function findUser(deps, email3) {
+  const t = await teamOverview(deps);
+  return t.members.find((m) => String(m.email).toLowerCase() === String(email3 || "").toLowerCase());
+}
+async function prepareInviteUser(deps, { email: email3, appPermissions, packageName: packageName2 }) {
+  const blocked = off2("users");
+  if (blocked) return blocked;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email3 || "")) throw new Error("Pass a valid email address.");
+  const warnings = checkPermissions(appPermissions);
+  const pkg = packageName2 || deps.defaultPackage();
+  const dev = developer(deps);
+  if (await findUser(deps, email3)) throw new Error(`${email3} is already on the team. Use play_set_user_app_permissions to change their access.`);
+  const preview = await prepareChange({
+    changes: [{ methodId: "users.create", params: { parent: dev }, body: { email: email3, grants: [{ packageName: pkg, appLevelPermissions: appPermissions }] } }],
+    deps
+  });
+  return {
+    invite: `${email3} with access to ${pkg} only`,
+    permissions: appPermissions,
+    warnings: warnings.length ? warnings : void 0,
+    note: "Google emails them an invitation. No account-wide permissions are given; access is to this app only.",
+    ...preview
+  };
+}
+async function prepareSetUserAppPermissions(deps, { email: email3, appPermissions, packageName: packageName2 }) {
+  const blocked = off2("users");
+  if (blocked) return blocked;
+  const warnings = checkPermissions(appPermissions);
+  const pkg = packageName2 || deps.defaultPackage();
+  const dev = developer(deps);
+  const user = await findUser(deps, email3);
+  if (!user) throw new Error(`${email3} is not on the team.`);
+  const existing = user.apps.find((a) => a.app === pkg);
+  const change = existing ? { methodId: "grants.patch", params: { name: `${dev}/users/${user.email}/grants/${pkg}`, updateMask: "appLevelPermissions" }, body: { appLevelPermissions: appPermissions } } : { methodId: "grants.create", params: { parent: `${dev}/users/${user.email}` }, body: { packageName: pkg, appLevelPermissions: appPermissions } };
+  const preview = await prepareChange({ changes: [change], deps });
+  return {
+    member: user.email,
+    app: pkg,
+    permissionsNow: existing ? existing.permissions : "no access to this app yet",
+    permissionsAfter: appPermissions,
+    warnings: warnings.length ? warnings : void 0,
+    ...preview
+  };
+}
+async function prepareRemoveUser(deps, { email: email3 }) {
+  const blocked = off2("users");
+  if (blocked) return blocked;
+  const dev = developer(deps);
+  const user = await findUser(deps, email3);
+  if (!user) throw new Error(`${email3} is not on the team.`);
+  const preview = await prepareChange({ changes: [{ methodId: "users.delete", params: { name: `${dev}/users/${user.email}` } }], deps });
+  return {
+    member: user.email,
+    losesAccessTo: user.apps.map((a) => a.app),
+    note: "They lose access to your developer account at once.",
+    ...preview
+  };
+}
+async function lookupOrder(deps, { packageName: packageName2, orderId }) {
+  const pkg = packageName2 || deps.defaultPackage();
+  if (!orderId) throw new Error("Pass orderId (it starts with GPA.).");
+  return deps.get(`${V32}/applications/${pkg}/orders/${enc2(orderId)}`, {});
+}
+async function lookupSubscription(deps, { packageName: packageName2, purchaseToken }) {
+  const pkg = packageName2 || deps.defaultPackage();
+  if (!purchaseToken) throw new Error("Pass purchaseToken.");
+  return deps.get(`${V32}/applications/${pkg}/purchases/subscriptionsv2/tokens/${enc2(purchaseToken)}`, {});
+}
+async function prepareRefundOrder(deps, { packageName: packageName2, orderId, revokeAccess = false }) {
+  const blocked = off2("refunds");
+  if (blocked) return blocked;
+  const pkg = packageName2 || deps.defaultPackage();
+  if (!/^GPA\.[0-9-]+(\.\.[0-9]+)?$/.test(orderId || "")) throw new Error("orderId must look like GPA.1234-5678-9012-34567.");
+  const preview = await prepareChange({
+    changes: [{ methodId: "orders.refund", params: { packageName: pkg, orderId, revoke: revokeAccess ? "true" : "false" } }],
+    deps
+  });
+  return {
+    order: orderId,
+    customerImpact: [
+      "The customer gets their money back for this order. This cannot be undone.",
+      revokeAccess ? "Their access is also REVOKED at once (for a subscription: it ends now)." : "Their access is NOT revoked: they keep what they bought (for a subscription: it runs to the end of the period, then stops renewing only if it was cancelled)."
+    ],
+    ...preview
+  };
+}
+async function prepareRevokeSubscription(deps, { packageName: packageName2, purchaseToken, refund = "full" }) {
+  const blocked = off2("refunds");
+  if (blocked) return blocked;
+  const pkg = packageName2 || deps.defaultPackage();
+  if (!purchaseToken) throw new Error("Pass purchaseToken (from the customer's receipt or your subscription backend).");
+  if (!["full", "prorated"].includes(refund)) throw new Error('refund must be "full" or "prorated".');
+  const preview = await prepareChange({
+    changes: [
+      {
+        methodId: "purchases.subscriptionsv2.revoke",
+        params: { packageName: pkg, token: purchaseToken },
+        body: { revocationContext: refund === "full" ? { fullRefund: {} } : { proratedRefund: {} } }
+      }
+    ],
+    deps
+  });
+  return {
+    customerImpact: [
+      "The subscription ends NOW and the customer loses access immediately.",
+      refund === "full" ? "They are refunded the full amount of the current period." : "They are refunded the unused part of the current period.",
+      "This cannot be undone."
+    ],
+    ...preview
+  };
+}
+
 // index.js
 var PLUGIN = "google-play-console";
 {
@@ -38217,6 +38401,7 @@ var writeDeps = {
   get: (p, q) => playRequest("GET", p, q),
   send: playSend,
   defaultPackage: () => loadConfig().defaultPackageName,
+  developerId: () => loadConfig().developerId,
   writesEnabled: () => loadConfig().writesEnabled,
   // Reads for the "before" picture; opens a throwaway edit only when needed.
   withReadContext: (pkg, needsEdit, fn) => needsEdit ? withTemporaryEdit(pkg, fn) : fn(null),
@@ -38273,7 +38458,7 @@ var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 var packageName = external_exports.string().optional().describe("Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.");
-var server = new McpServer({ name: "hypercaffium-play", version: "0.12.2" });
+var server = new McpServer({ name: "hypercaffium-play", version: "0.13.0" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();
@@ -38525,6 +38710,7 @@ function settingsView() {
     configured: cfg.configured,
     credentialsProblems: configProblems(cfg),
     defaultPackageName: cfg.defaultPackageName || null,
+    developerId: cfg.developerId || null,
     writesEnabled: cfg.writesEnabled,
     features: describeFeatures(currentFeatures(), "play"),
     toolsLoadedFor: Object.keys(STARTUP_FEATURES).filter((k) => STARTUP_FEATURES[k]),
@@ -38545,6 +38731,7 @@ server.registerTool(
     inputSchema: {
       serviceAccountKeyPath: external_exports.string().optional().describe("Full path to the service-account .json key file"),
       defaultPackageName: external_exports.string().regex(/^[A-Za-z0-9._]+$/).optional().describe("Android package name, e.g. com.example.app"),
+      developerId: external_exports.string().regex(/^[0-9]{5,25}$/).optional().describe("Play developer account ID (only for team tools): the number after /developers/ in the Play Console web address"),
       timezone: external_exports.string().optional().describe("IANA time zone such as America/New_York"),
       writesEnabled: external_exports.boolean().optional().describe("Master switch for all changes"),
       features: external_exports.record(external_exports.string(), external_exports.boolean()).optional().describe('Feature switches to change, e.g. {"uploads": false}')
@@ -38630,6 +38817,59 @@ featureTool(
     releaseNotes: notesSchema.optional()
   },
   (a) => prepareUploadBundle(writeDeps, a)
+);
+readTool(
+  "play_team_overview",
+  "Who has access to the Google Play developer account: emails, account-wide permissions, and per-app permissions. Read-only. Needs developerId in the settings.",
+  {},
+  () => teamOverview(writeDeps)
+);
+readTool(
+  "play_order_lookup",
+  "Look up one Google Play order by its id (GPA....): what was bought, when, the amount and its state. Read-only. Needs the Manage orders and subscriptions permission.",
+  { packageName, orderId: external_exports.string() },
+  (a) => lookupOrder(writeDeps, a)
+);
+readTool(
+  "play_subscription_lookup",
+  "Look up one customer subscription by its purchase token: plan, state, renewal and expiry. Read-only.",
+  { packageName, purchaseToken: external_exports.string() },
+  (a) => lookupSubscription(writeDeps, a)
+);
+featureTool(
+  "users",
+  "play_invite_user",
+  "CRITICAL. Prepare inviting someone to the Google Play developer account with access to THIS app only and the listed permissions (no account-wide permissions). Warns about powerful ones. Apply with play_apply_sensitive_change.",
+  { packageName, email: external_exports.string(), appPermissions: external_exports.array(external_exports.enum(APP_PERMISSIONS)).min(1) },
+  (a) => prepareInviteUser(writeDeps, a)
+);
+featureTool(
+  "users",
+  "play_set_user_app_permissions",
+  "CRITICAL. Prepare replacing a team member's permissions for this app (shows now and after). Apply with play_apply_sensitive_change.",
+  { packageName, email: external_exports.string(), appPermissions: external_exports.array(external_exports.enum(APP_PERMISSIONS)).min(1) },
+  (a) => prepareSetUserAppPermissions(writeDeps, a)
+);
+featureTool(
+  "users",
+  "play_remove_user",
+  "CRITICAL. Prepare removing someone from the Google Play developer account (they lose access to every app at once). Apply with play_apply_sensitive_change.",
+  { email: external_exports.string() },
+  (a) => prepareRemoveUser(writeDeps, a)
+);
+featureTool(
+  "refunds",
+  "play_refund_order",
+  "CRITICAL. Prepare refunding one order, optionally also revoking the customer's access. Cannot be undone; the preview spells out what the customer gets and loses. Apply with play_apply_sensitive_change.",
+  { packageName, orderId: external_exports.string().describe("GPA.xxxx-xxxx-xxxx-xxxxx"), revokeAccess: external_exports.boolean().default(false) },
+  (a) => prepareRefundOrder(writeDeps, a)
+);
+featureTool(
+  "refunds",
+  "play_revoke_subscription",
+  "CRITICAL. Prepare ending a customer subscription NOW with a full or prorated refund. Cannot be undone. Apply with play_apply_sensitive_change.",
+  { packageName, purchaseToken: external_exports.string(), refund: external_exports.enum(["full", "prorated"]).default("full") },
+  (a) => prepareRevokeSubscription(writeDeps, a)
 );
 readTool(
   "play_list_testers",

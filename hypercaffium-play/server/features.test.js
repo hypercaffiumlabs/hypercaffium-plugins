@@ -70,14 +70,16 @@ test('critical features are off by default; app signing rotation is no longer re
   }
 });
 
-test('critical features switched on are Tier 2 and sensitive; deletes stay blocked', () => {
+test('critical features switched on are Tier 2 and sensitive; only team-member deletes are allowed', () => {
   setFeatureSource(() => ({ users: true, refunds: true, signing: true }));
   for (const id of ['users.create', 'orders.refund', 'appsigning.rotateAppSigningKey']) {
     const v = classify(M(id));
     assert.equal(v.tier, 2, id);
     assert.equal(v.sensitive, true, id);
   }
-  assert.equal(classify(M('users.delete')).tier, 3);
+  assert.equal(classify(M('users.delete')).sensitive, true, 'removing a team member is a critical, sensitive change');
+  assert.equal(classify(M('edits.images.delete')).tier, 3, 'other deletes stay blocked');
+  assert.equal(classify(M('inappproducts.delete')).tier, 3);
 });
 
 test('the guard refuses critical paths unless their feature is on', () => {
@@ -92,7 +94,9 @@ test('the guard refuses critical paths unless their feature is on', () => {
   assert.doesNotThrow(() => assertWriteAllowed('POST', refund, on));
   assert.doesNotThrow(() => assertWriteAllowed('POST', rotate, on));
   assert.doesNotThrow(() => assertWriteAllowed('POST', invite, on));
-  assert.throws(() => assertWriteAllowed('DELETE', '/androidpublisher/v3/developers/123/users/a@b.com', on), /not an allowed change/);
+  assert.doesNotThrow(() => assertWriteAllowed('DELETE', '/androidpublisher/v3/developers/123/users/a%40b.com', on), 'removing a member is allowed when users is on');
+  assert.throws(() => assertWriteAllowed('DELETE', '/androidpublisher/v3/developers/123/users/a%40b.com', off), /not an allowed change/);
+  assert.throws(() => assertWriteAllowed('DELETE', '/androidpublisher/v3/developers/123', on), /not an allowed change/);
 });
 
 test('a sensitive ticket can only be applied with the sensitive apply tool, and vice versa', async () => {

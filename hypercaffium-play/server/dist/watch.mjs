@@ -158,6 +158,8 @@ function loadConfig() {
   return {
     serviceAccountKeyPath: process.env.PLAY_SA_KEY_PATH || file.serviceAccountKeyPath || "",
     defaultPackageName: process.env.PLAY_PACKAGE_NAME || file.defaultPackageName || "",
+    // Only needed for team tools: the number after /developers/ in the Play Console web address.
+    developerId: process.env.PLAY_DEVELOPER_ID || file.developerId || "",
     writesEnabled: rawWrites === true || /^(1|true|yes)$/i.test(String(rawWrites || "")),
     timezone: process.env.HYPERCAFFIUM_TIMEZONE || file.timezone || "",
     // Feature switches (see shared/features.js); missing ones fall back to their defaults.

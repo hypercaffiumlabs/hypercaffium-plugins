@@ -15,6 +15,7 @@ Every change is **previewed, confirmed and logged**. Nothing happens without you
 | **Reviews** | `asc_review_inbox`, `asc_reply_to_review` |
 | **App Review & info** | `asc_edit_review_details`, `asc_edit_app_info` |
 | **TestFlight** | `asc_testflight_overview`, `asc_testflight_set_notes`, `asc_testflight_add_tester`, `asc_testflight_remove_tester`, `asc_testflight_add_build_to_group`, `asc_testflight_submit_for_review`, `asc_testflight_expire_build` |
+| **Team and signing (Critical, off by default)** | `asc_team_overview`, `asc_signing_overview` (read); `asc_invite_user`, `asc_change_user`, `asc_remove_user`, `asc_register_device`, `asc_set_device_enabled`, `asc_revoke_certificate`, `asc_delete_profile` (applied only with `asc_apply_sensitive_change`) |
 | **Builds** | `asc_upload_build` (an .ipa from this computer; reads version and build number from the file). Only if you do not use EAS, Xcode or fastlane uploads |
 | **Media** | `asc_upload_screenshots`, `asc_upload_app_previews` (videos), `asc_clear_screenshots`; both uploads also work on custom product pages |
 | **Offers** | `asc_offer_codes_overview`, `asc_create_offer_code`, `asc_generate_offer_codes`, `asc_set_offer_code_active`, `asc_create_promotional_offer`, `asc_create_win_back_offer` |

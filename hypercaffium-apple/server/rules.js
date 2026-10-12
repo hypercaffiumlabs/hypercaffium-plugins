@@ -162,9 +162,22 @@ export async function classify(op, filledPath, lookup, opts = {}) {
 // nobody's account and nothing public, and they can simply be added back.
 const TESTER_REMOVE = /^\/v1\/betaGroups\/[^/]+\/relationships\/betaTesters$/;
 
+// Deletes that belong to a CRITICAL feature. They are only reachable when that feature is switched on
+// (featureVerdict refuses them otherwise), and they are always sensitive: separate apply tool, Tier 2.
+const CRITICAL_DELETES = [
+  [/^\/v1\/users\/[^/]+$/, 'removes a person from your App Store Connect team'],
+  [/^\/v1\/userInvitations\/[^/]+$/, 'cancels a pending invitation to your team'],
+  [/^\/v1\/certificates\/[^/]+$/, 'revokes a signing certificate; builds signed with it can no longer be installed or uploaded, and EAS or Xcode must create a new one'],
+  [/^\/v1\/profiles\/[^/]+$/, 'deletes a provisioning profile; EAS or Xcode recreates one on the next build'],
+];
+
 async function classifyTier(op, filledPath, lookup, opts) {
   if (op.method === 'DELETE' && TESTER_REMOVE.test(filledPath)) {
     return { tier: 2, reason: 'removes testers from a TestFlight group (they lose access to its builds; they can be added back)' };
+  }
+  if (op.method === 'DELETE') {
+    const hit = CRITICAL_DELETES.find(([re]) => re.test(filledPath));
+    if (hit) return { tier: 2, reason: hit[1] };
   }
   if (op.method === 'DELETE') {
     const m = SCREENSHOT_DELETE.exec(filledPath);

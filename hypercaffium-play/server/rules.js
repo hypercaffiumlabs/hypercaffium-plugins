@@ -47,6 +47,8 @@ const BLOCKED = [
   },
 ];
 
+const CRITICAL_DELETES = new Set(['users.delete', 'grants.delete']);
+
 const TIER1 = []; // intentionally empty for now; add narrowly, with tests, as workflows need them
 
 export function classify(method) {
@@ -58,6 +60,8 @@ export function classify(method) {
       reason: `The "${feature}" feature is switched off in your settings, so this change is refused. Run /hypercaffium-play:setup to see or change your settings.`,
     };
   }
+  // The only deletes outside an edit: removing a team member or one app's access, when "users" is on.
+  if (CRITICAL_DELETES.has(method.id)) return { tier: 2, feature, sensitive: true, reason: criticalReason(feature) };
   for (const b of BLOCKED) {
     if (b.test(method)) return { tier: 3, feature, reason: b.reason };
   }

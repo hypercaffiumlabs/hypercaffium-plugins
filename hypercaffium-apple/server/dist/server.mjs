@@ -29212,8 +29212,8 @@ function currencyCode2(_params) {
   return _stringFormat(ZodCustomStringFormat, "currency_code", currencyCode, _params);
 }
 function hash(alg, params) {
-  const enc6 = params?.enc ?? "hex";
-  const format = `${alg}_${enc6}`;
+  const enc7 = params?.enc ?? "hex";
+  const format = `${alg}_${enc7}`;
   const regex = regexes_exports[format];
   if (!regex)
     throw new Error(`Unrecognized hash format: ${format}`);
@@ -37157,9 +37157,19 @@ async function classify(op, filledPath, lookup2, opts = {}) {
   return { ...verdict, feature: fv.feature };
 }
 var TESTER_REMOVE = /^\/v1\/betaGroups\/[^/]+\/relationships\/betaTesters$/;
+var CRITICAL_DELETES = [
+  [/^\/v1\/users\/[^/]+$/, "removes a person from your App Store Connect team"],
+  [/^\/v1\/userInvitations\/[^/]+$/, "cancels a pending invitation to your team"],
+  [/^\/v1\/certificates\/[^/]+$/, "revokes a signing certificate; builds signed with it can no longer be installed or uploaded, and EAS or Xcode must create a new one"],
+  [/^\/v1\/profiles\/[^/]+$/, "deletes a provisioning profile; EAS or Xcode recreates one on the next build"]
+];
 async function classifyTier(op, filledPath, lookup2, opts) {
   if (op.method === "DELETE" && TESTER_REMOVE.test(filledPath)) {
     return { tier: 2, reason: "removes testers from a TestFlight group (they lose access to its builds; they can be added back)" };
+  }
+  if (op.method === "DELETE") {
+    const hit = CRITICAL_DELETES.find(([re]) => re.test(filledPath));
+    if (hit) return { tier: 2, reason: hit[1] };
   }
   if (op.method === "DELETE") {
     const m = SCREENSHOT_DELETE.exec(filledPath);
@@ -37488,8 +37498,8 @@ async function applyChange({ ticketId, requireTier1 = false, sensitiveTool = fal
     return deps.runBuildUpload(p);
   }
   if (p.kind === "screenshots") {
-    const off = (p.features || ["listing"]).filter((k) => !currentFeatures()[k]);
-    if (off.length) throw new Error(`The "${off.join('", "')}" feature was switched off since the preview, so this upload is refused.`);
+    const off2 = (p.features || ["listing"]).filter((k) => !currentFeatures()[k]);
+    if (off2.length) throw new Error(`The "${off2.join('", "')}" feature was switched off since the preview, so this upload is refused.`);
     deps.store.markUsed(ticketId);
     return deps.runScreenshots(p);
   }
@@ -38053,12 +38063,12 @@ async function resolveParent(deps, { appId: appId2, version: version2, platform,
 }
 var featureOff = (features) => {
   const f = currentFeatures();
-  const off = features.filter((k) => !f[k]);
-  return off.length ? { allowed: false, tier: 3, blocked: true, reason: `The "${off.join('", "')}" feature is switched off in your settings. Run /hypercaffium-apple:setup to see or change your settings.` } : null;
+  const off2 = features.filter((k) => !f[k]);
+  return off2.length ? { allowed: false, tier: 3, blocked: true, reason: `The "${off2.join('", "')}" feature is switched off in your settings. Run /hypercaffium-apple:setup to see or change your settings.` } : null;
 };
 async function prepareScreenshots(deps, { appId: appId2, version: version2, locale = "en-US", displayType, files, platform = "IOS", customProductPage }) {
-  const off = featureOff(customProductPage ? ["listing", "marketing"] : ["listing"]);
-  if (off) return off;
+  const off2 = featureOff(customProductPage ? ["listing", "marketing"] : ["listing"]);
+  if (off2) return off2;
   if (!Array.isArray(files) || files.length === 0) throw new Error("Pass files: a list of full paths to PNG or JPEG screenshots.");
   if (files.length > MAX_PER_SET) throw new Error(`At most ${MAX_PER_SET} screenshots per set.`);
   const setOp = findOperation("POST", "/v1/appScreenshotSets");
@@ -38079,8 +38089,8 @@ async function prepareScreenshots(deps, { appId: appId2, version: version2, loca
   });
 }
 async function prepareAppPreviews(deps, { appId: appId2, version: version2, locale = "en-US", previewType, files, previewFrameTimeCode, platform = "IOS", customProductPage }) {
-  const off = featureOff(customProductPage ? ["listing", "marketing"] : ["listing"]);
-  if (off) return off;
+  const off2 = featureOff(customProductPage ? ["listing", "marketing"] : ["listing"]);
+  if (off2) return off2;
   if (!Array.isArray(files) || files.length === 0) throw new Error("Pass files: a list of full paths to .mov, .m4v or .mp4 videos.");
   if (files.length > MAX_PREVIEWS_PER_SET) throw new Error(`At most ${MAX_PREVIEWS_PER_SET} app previews per set.`);
   if (previewFrameTimeCode && !/^\d{2}:\d{2}:\d{2}$/.test(previewFrameTimeCode)) throw new Error("previewFrameTimeCode must look like 00:00:05 (the poster frame).");
@@ -38451,17 +38461,201 @@ async function runBuildUpload(payload, deps, { fetchImpl = fetch, pollMs = 15e3,
   }
 }
 
-// subs.js
-var qs2 = (o) => {
-  const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
-  return e.length ? `?${e.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&")}` : "";
-};
+// critical.js
+var enc3 = encodeURIComponent;
 var opFor2 = (method, path8) => {
   const op = findOperation(method, path8);
   if (!op) throw new Error(`Apple's API has no ${method} ${path8}.`);
   return op;
 };
-var enc3 = encodeURIComponent;
+var off = (feature) => currentFeatures()[feature] ? null : {
+  allowed: false,
+  tier: 3,
+  blocked: true,
+  reason: `The critical "${feature}" feature is off. Only the owner can switch it on, in the terminal setup menu (see asc_settings for the command).`
+};
+var ROLES = ["ADMIN", "FINANCE", "SALES", "MARKETING", "APP_MANAGER", "DEVELOPER", "ACCESS_TO_REPORTS", "CUSTOMER_SUPPORT", "CREATE_APPS", "GENERATE_INDIVIDUAL_KEYS"];
+var ROLE_WARNINGS = {
+  ADMIN: "ADMIN can manage the whole team, every app, agreements and API keys.",
+  FINANCE: "FINANCE can see sales, payments and tax and banking details.",
+  GENERATE_INDIVIDUAL_KEYS: "GENERATE_INDIVIDUAL_KEYS lets them create their own API keys."
+};
+function checkRoles(roles) {
+  if (!Array.isArray(roles) || !roles.length) throw new Error(`roles must list one or more of: ${ROLES.join(", ")}.`);
+  const bad = roles.filter((r) => !ROLES.includes(r));
+  if (bad.length) throw new Error(`Not allowed here: ${bad.join(", ")}. Choose from ${ROLES.join(", ")} (ACCOUNT_HOLDER cannot be given).`);
+  return roles.map((r) => ROLE_WARNINGS[r]).filter(Boolean);
+}
+async function teamOverview(deps) {
+  const [users, invites] = await Promise.all([
+    deps.get("/v1/users?limit=200"),
+    deps.get("/v1/userInvitations?limit=200").catch(() => ({ data: [] }))
+  ]);
+  return {
+    members: list(users).map((u) => ({ id: u.id, name: [u.firstName, u.lastName].filter(Boolean).join(" "), email: u.username, roles: u.roles, allApps: u.allAppsVisible })),
+    pendingInvitations: list(invites).map((i) => ({ id: i.id, email: i.email, roles: i.roles, expires: toLocalTime(i.expirationDate) }))
+  };
+}
+async function visibleAppsRel(deps, appIds) {
+  if (!appIds || !appIds.length) return void 0;
+  return { data: appIds.map((id) => ({ type: "apps", id })) };
+}
+async function prepareInviteUser(deps, { email: email3, firstName, lastName, roles, allAppsVisible = false, appIds, provisioningAllowed = false }) {
+  const blocked = off("users");
+  if (blocked) return blocked;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email3 || "")) throw new Error("Pass a valid email address.");
+  if (!firstName || !lastName) throw new Error("Pass firstName and lastName.");
+  const warnings = checkRoles(roles);
+  if (!allAppsVisible && !(appIds && appIds.length)) {
+    appIds = [await resolveApp(deps)];
+  }
+  const relationships = allAppsVisible ? void 0 : { visibleApps: await visibleAppsRel(deps, appIds) };
+  const preview = await prepareChange({
+    op: opFor2("POST", "/v1/userInvitations"),
+    body: {
+      data: {
+        type: "userInvitations",
+        attributes: { email: email3, firstName, lastName, roles, allAppsVisible, provisioningAllowed },
+        ...relationships ? { relationships } : {}
+      }
+    },
+    deps
+  });
+  return {
+    invite: `${firstName} ${lastName} <${email3}> as ${roles.join(", ")}`,
+    apps: allAppsVisible ? "ALL apps, including future ones" : appIds,
+    warnings: warnings.length ? warnings : void 0,
+    note: "Apple emails them an invitation. Prefer the fewest roles and only the apps they need.",
+    ...preview
+  };
+}
+async function findMember(deps, email3) {
+  const t = await teamOverview(deps);
+  const lower = String(email3 || "").toLowerCase();
+  return {
+    user: t.members.find((u) => String(u.email).toLowerCase() === lower),
+    invite: t.pendingInvitations.find((i) => String(i.email).toLowerCase() === lower)
+  };
+}
+async function prepareChangeUser(deps, { email: email3, roles, allAppsVisible, appIds }) {
+  const blocked = off("users");
+  if (blocked) return blocked;
+  const { user } = await findMember(deps, email3);
+  if (!user) throw new Error(`${email3} is not on the team (pending invitations cannot be edited; cancel and re-invite).`);
+  if ((user.roles || []).includes("ACCOUNT_HOLDER")) throw new Error("The Account Holder cannot be changed through the API.");
+  const attributes = {};
+  let warnings = [];
+  if (roles) {
+    warnings = checkRoles(roles);
+    attributes.roles = roles;
+  }
+  if (allAppsVisible !== void 0) attributes.allAppsVisible = allAppsVisible;
+  const relationships = appIds && appIds.length ? { visibleApps: await visibleAppsRel(deps, appIds) } : void 0;
+  if (!Object.keys(attributes).length && !relationships) throw new Error("Pass roles, allAppsVisible and/or appIds to change.");
+  const preview = await prepareChange({
+    op: opFor2("PATCH", "/v1/users/{id}"),
+    pathParams: { id: user.id },
+    body: { data: { type: "users", id: user.id, attributes, ...relationships ? { relationships } : {} } },
+    deps
+  });
+  return { member: `${user.name} <${user.email}>`, rolesNow: user.roles, warnings: warnings.length ? warnings : void 0, ...preview };
+}
+async function prepareRemoveUser(deps, { email: email3 }) {
+  const blocked = off("users");
+  if (blocked) return blocked;
+  const { user, invite } = await findMember(deps, email3);
+  if (user) {
+    if ((user.roles || []).includes("ACCOUNT_HOLDER")) throw new Error("The Account Holder cannot be removed.");
+    return {
+      member: `${user.name} <${user.email}> (${(user.roles || []).join(", ")})`,
+      note: "They lose access to App Store Connect at once. Their API keys, if any, keep working until revoked separately.",
+      ...await prepareChange({ op: opFor2("DELETE", "/v1/users/{id}"), pathParams: { id: user.id }, deps })
+    };
+  }
+  if (invite) {
+    return {
+      invitation: `${invite.email} (${(invite.roles || []).join(", ")})`,
+      ...await prepareChange({ op: opFor2("DELETE", "/v1/userInvitations/{id}"), pathParams: { id: invite.id }, deps })
+    };
+  }
+  throw new Error(`${email3} is neither on the team nor invited.`);
+}
+var EAS_WARNING = "If EAS, Xcode or fastlane manages your signing, they rely on these certificates and profiles. Changing them can make the next build or upload fail until the tool recreates them.";
+async function signingOverview(deps) {
+  const [certs, profiles, devices, bundleIds] = await Promise.all([
+    deps.get("/v1/certificates?limit=200"),
+    deps.get("/v1/profiles?limit=200"),
+    deps.get("/v1/devices?limit=200"),
+    deps.get("/v1/bundleIds?limit=200")
+  ]);
+  return {
+    certificates: list(certs).map((c) => ({ id: c.id, name: c.displayName || c.name, type: c.certificateType, expires: toLocalTime(c.expirationDate), serial: c.serialNumber })),
+    profiles: list(profiles).map((p) => ({ id: p.id, name: p.name, type: p.profileType, state: p.profileState, expires: toLocalTime(p.expirationDate) })),
+    devices: list(devices).map((d) => ({ id: d.id, name: d.name, platform: d.platform, status: d.status, model: d.model })),
+    bundleIds: list(bundleIds).map((b) => ({ id: b.id, identifier: b.identifier, name: b.name, platform: b.platform })),
+    note: EAS_WARNING
+  };
+}
+async function prepareRegisterDevice(deps, { name, udid, platform = "IOS" }) {
+  const blocked = off("signing");
+  if (blocked) return blocked;
+  if (!name || name.length > 50) throw new Error("Pass a device name (50 characters max).");
+  if (!/^[0-9A-Fa-f-]{25,40}$/.test(udid || "")) throw new Error("That does not look like a device UDID (25 to 40 hex characters and dashes).");
+  return {
+    device: `${name} (${udid})`,
+    note: "Apple allows 100 devices of each type per membership year, and a registered device counts even if disabled later. Development and ad hoc profiles must be regenerated to include it.",
+    ...await prepareChange({
+      op: opFor2("POST", "/v1/devices"),
+      body: { data: { type: "devices", attributes: { name, udid, platform } } },
+      deps
+    })
+  };
+}
+async function prepareSetDeviceEnabled(deps, { deviceId, enabled }) {
+  const blocked = off("signing");
+  if (blocked) return blocked;
+  if (typeof enabled !== "boolean") throw new Error("Pass enabled: true or false.");
+  return prepareChange({
+    op: opFor2("PATCH", "/v1/devices/{id}"),
+    pathParams: { id: deviceId },
+    body: { data: { type: "devices", id: deviceId, attributes: { status: enabled ? "ENABLED" : "DISABLED" } } },
+    deps
+  });
+}
+async function prepareRevokeCertificate(deps, { certificateId }) {
+  const blocked = off("signing");
+  if (blocked) return blocked;
+  const cert = await deps.get(`/v1/certificates/${enc3(certificateId)}`);
+  const c = cert?.data?.attributes || {};
+  return {
+    certificate: `${c.displayName || c.name || certificateId} (${c.certificateType || "unknown type"}, expires ${toLocalTime(c.expirationDate)})`,
+    warning: `Revoking cannot be undone. Apps already on the App Store keep working, but ${c.certificateType && /DISTRIBUTION/.test(c.certificateType) ? "no new build can be signed or uploaded with it, and ad hoc / enterprise installs signed with it stop opening" : "development builds signed with it stop installing"}. ${EAS_WARNING}`,
+    ...await prepareChange({ op: opFor2("DELETE", "/v1/certificates/{id}"), pathParams: { id: certificateId }, deps })
+  };
+}
+async function prepareDeleteProfile(deps, { profileId }) {
+  const blocked = off("signing");
+  if (blocked) return blocked;
+  const prof = await deps.get(`/v1/profiles/${enc3(profileId)}`);
+  const p = prof?.data?.attributes || {};
+  return {
+    profile: `${p.name || profileId} (${p.profileType || "unknown type"})`,
+    warning: `Deleting cannot be undone. ${EAS_WARNING}`,
+    ...await prepareChange({ op: opFor2("DELETE", "/v1/profiles/{id}"), pathParams: { id: profileId }, deps })
+  };
+}
+
+// subs.js
+var qs2 = (o) => {
+  const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
+  return e.length ? `?${e.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&")}` : "";
+};
+var opFor3 = (method, path8) => {
+  const op = findOperation(method, path8);
+  if (!op) throw new Error(`Apple's API has no ${method} ${path8}.`);
+  return op;
+};
+var enc4 = encodeURIComponent;
 async function getAll(deps, path8, { pages = 6 } = {}) {
   const data = [];
   const included = [];
@@ -38476,7 +38670,7 @@ async function getAll(deps, path8, { pages = 6 } = {}) {
   return { data, included };
 }
 async function subscriptionPrices(deps, { subscriptionId: subscriptionId2, territory }) {
-  const { data, included } = await getAll(deps, `/v1/subscriptions/${enc3(subscriptionId2)}/prices${qs2({ include: "subscriptionPricePoint,territory", limit: 200 })}`);
+  const { data, included } = await getAll(deps, `/v1/subscriptions/${enc4(subscriptionId2)}/prices${qs2({ include: "subscriptionPricePoint,territory", limit: 200 })}`);
   const byId = (type) => new Map(included.filter((i) => i.type === type).map((i) => [i.id, i]));
   const points = byId("subscriptionPricePoints");
   const territories = byId("territories");
@@ -38510,7 +38704,7 @@ async function subscriptionPrices(deps, { subscriptionId: subscriptionId2, terri
   };
 }
 async function findPricePoint(deps, { subscriptionId: subscriptionId2, territory = "USA", amount }) {
-  const { data } = await getAll(deps, `/v1/subscriptions/${enc3(subscriptionId2)}/pricePoints${qs2({ "filter[territory]": territory, limit: 200 })}`, { pages: 8 });
+  const { data } = await getAll(deps, `/v1/subscriptions/${enc4(subscriptionId2)}/pricePoints${qs2({ "filter[territory]": territory, limit: 200 })}`, { pages: 8 });
   const points = data.map((p) => ({ id: p.id, customerPrice: p.attributes?.customerPrice, proceeds: p.attributes?.proceeds }));
   if (amount === void 0) return { territory, points };
   const want = Number(amount);
@@ -38521,17 +38715,17 @@ async function findPricePoint(deps, { subscriptionId: subscriptionId2, territory
 }
 async function subscriptionOverview(deps, { appId: appId2 }) {
   const app = await resolveApp(deps, appId2);
-  const groups = list(await deps.get(`/v1/apps/${enc3(app)}/subscriptionGroups${qs2({ limit: 50 })}`));
+  const groups = list(await deps.get(`/v1/apps/${enc4(app)}/subscriptionGroups${qs2({ limit: 50 })}`));
   const out = [];
   for (const g of groups) {
-    const subs = list(await deps.get(`/v1/subscriptionGroups/${enc3(g.id)}/subscriptions${qs2({ limit: 50 })}`)).slice(0, 30);
+    const subs = list(await deps.get(`/v1/subscriptionGroups/${enc4(g.id)}/subscriptions${qs2({ limit: 50 })}`)).slice(0, 30);
     const rows = [];
     for (const s of subs) {
       const [locs, intro, promo, codes, prices] = await Promise.all([
-        deps.get(`/v1/subscriptions/${enc3(s.id)}/subscriptionLocalizations${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
-        deps.get(`/v1/subscriptions/${enc3(s.id)}/introductoryOffers${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
-        deps.get(`/v1/subscriptions/${enc3(s.id)}/promotionalOffers${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
-        deps.get(`/v1/subscriptions/${enc3(s.id)}/offerCodes${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
+        deps.get(`/v1/subscriptions/${enc4(s.id)}/subscriptionLocalizations${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
+        deps.get(`/v1/subscriptions/${enc4(s.id)}/introductoryOffers${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
+        deps.get(`/v1/subscriptions/${enc4(s.id)}/promotionalOffers${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
+        deps.get(`/v1/subscriptions/${enc4(s.id)}/offerCodes${qs2({ limit: 50 })}`).catch(() => ({ data: [] })),
         subscriptionPrices(deps, { subscriptionId: s.id, territory: "USA" }).catch(() => null)
       ]);
       rows.push({
@@ -38573,7 +38767,7 @@ async function prepareSetPrice(deps, { subscriptionId: subscriptionId2, territor
   const nowBy = new Map(current.current.map((r) => [r.territory, r]));
   let targets = [{ territory, pricePointId: basePoint.id, customerPrice }];
   if (allTerritories) {
-    const eq = await getAll(deps, `/v1/subscriptionPricePoints/${enc3(basePoint.id)}/equalizations${qs2({ include: "territory", limit: 200 })}`, { pages: 5 });
+    const eq = await getAll(deps, `/v1/subscriptionPricePoints/${enc4(basePoint.id)}/equalizations${qs2({ include: "territory", limit: 200 })}`, { pages: 5 });
     const terr = new Map(eq.included.filter((i) => i.type === "territories").map((i) => [i.id, i]));
     targets = [
       ...targets,
@@ -38631,7 +38825,7 @@ async function prepareEditSubscription(deps, { subscriptionId: subscriptionId2, 
   if (!entries.length) throw new Error(`Provide at least one field: ${allowed.join(", ")}.`);
   for (const [k] of entries) if (!allowed.includes(k)) throw new Error(`Cannot change "${k}" here. Allowed: ${allowed.join(", ")}.`);
   const preview = await prepareChange({
-    op: opFor2("PATCH", "/v1/subscriptions/{id}"),
+    op: opFor3("PATCH", "/v1/subscriptions/{id}"),
     pathParams: { id: subscriptionId2 },
     body: { data: { type: "subscriptions", id: subscriptionId2, attributes: Object.fromEntries(entries) } },
     deps
@@ -38650,11 +38844,11 @@ async function prepareEditSubscriptionLocalization(deps, { subscriptionId: subsc
     if (description.length > 45) throw new Error("A subscription description may be at most 45 characters.");
     attrs.description = description;
   }
-  const locs = list(await deps.get(`/v1/subscriptions/${enc3(subscriptionId2)}/subscriptionLocalizations${qs2({ limit: 50 })}`));
+  const locs = list(await deps.get(`/v1/subscriptions/${enc4(subscriptionId2)}/subscriptionLocalizations${qs2({ limit: 50 })}`));
   const hit = locs.find((l) => l.locale === locale);
   if (hit) {
     return prepareChange({
-      op: opFor2("PATCH", "/v1/subscriptionLocalizations/{id}"),
+      op: opFor3("PATCH", "/v1/subscriptionLocalizations/{id}"),
       pathParams: { id: hit.id },
       body: { data: { type: "subscriptionLocalizations", id: hit.id, attributes: attrs } },
       deps
@@ -38662,7 +38856,7 @@ async function prepareEditSubscriptionLocalization(deps, { subscriptionId: subsc
   }
   if (!attrs.name || attrs.description === void 0) throw new Error(`No ${locale} localization exists yet; creating one needs both name and description.`);
   const preview = await prepareChange({
-    op: opFor2("POST", "/v1/subscriptionLocalizations"),
+    op: opFor3("POST", "/v1/subscriptionLocalizations"),
     body: {
       data: {
         type: "subscriptionLocalizations",
@@ -38687,19 +38881,19 @@ async function prepareIntroOffer(deps, { subscriptionId: subscriptionId2, offerM
     relationships.subscriptionPricePoint = { data: { type: "subscriptionPricePoints", id: pp.match.id } };
   }
   return prepareChange({
-    op: opFor2("POST", "/v1/subscriptionIntroductoryOffers"),
+    op: opFor3("POST", "/v1/subscriptionIntroductoryOffers"),
     body: { data: { type: "subscriptionIntroductoryOffers", attributes, relationships } },
     deps
   });
 }
 
 // marketing.js
-var enc4 = encodeURIComponent;
+var enc5 = encodeURIComponent;
 var qs3 = (o) => {
   const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
   return e.length ? `?${e.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&")}` : "";
 };
-var opFor3 = (method, path8) => {
+var opFor4 = (method, path8) => {
   const op = findOperation(method, path8);
   if (!op) throw new Error(`Apple's API has no ${method} ${path8}.`);
   return op;
@@ -38708,22 +38902,22 @@ var DATE2 = /^\d{4}-\d{2}-\d{2}$/;
 var DURATIONS = ["THREE_DAYS", "ONE_WEEK", "TWO_WEEKS", "ONE_MONTH", "TWO_MONTHS", "THREE_MONTHS", "SIX_MONTHS", "ONE_YEAR"];
 var OFFER_MODES = ["FREE_TRIAL", "PAY_AS_YOU_GO", "PAY_UP_FRONT"];
 async function findPage(deps, app, page) {
-  const pages = list(await deps.get(`/v1/apps/${enc4(app)}/appCustomProductPages${qs3({ limit: 50 })}`));
+  const pages = list(await deps.get(`/v1/apps/${enc5(app)}/appCustomProductPages${qs3({ limit: 50 })}`));
   const hit = pages.find((p) => p.id === page || p.name === page);
   if (!hit) throw new Error(`No custom product page "${page}". Pages: ${pages.map((p) => p.name).join(", ") || "none"}.`);
   return hit;
 }
 async function pageVersions(deps, pageId) {
-  return list(await deps.get(`/v1/appCustomProductPages/${enc4(pageId)}/appCustomProductPageVersions${qs3({ limit: 20 })}`));
+  return list(await deps.get(`/v1/appCustomProductPages/${enc5(pageId)}/appCustomProductPageVersions${qs3({ limit: 20 })}`));
 }
 async function customPagesOverview(deps, { appId: appId2 }) {
   const app = await resolveApp(deps, appId2);
-  const pages = list(await deps.get(`/v1/apps/${enc4(app)}/appCustomProductPages${qs3({ limit: 50 })}`));
+  const pages = list(await deps.get(`/v1/apps/${enc5(app)}/appCustomProductPages${qs3({ limit: 50 })}`));
   const out = [];
   for (const p of pages) {
     const versions = await pageVersions(deps, p.id).catch(() => []);
     const latest = versions[0];
-    const locs = latest ? list(await deps.get(`/v1/appCustomProductPageVersions/${enc4(latest.id)}/appCustomProductPageLocalizations${qs3({ limit: 50 })}`).catch(() => ({ data: [] }))) : [];
+    const locs = latest ? list(await deps.get(`/v1/appCustomProductPageVersions/${enc5(latest.id)}/appCustomProductPageLocalizations${qs3({ limit: 50 })}`).catch(() => ({ data: [] }))) : [];
     out.push({
       id: p.id,
       name: p.name,
@@ -38745,7 +38939,7 @@ async function prepareCreateCustomPage(deps, { appId: appId2, name, locale = "en
   };
   let template = null;
   if (copyFromLiveVersion) {
-    const versions = list(await deps.get(`/v1/apps/${enc4(app)}/appStoreVersions${qs3({ "filter[appStoreState]": "READY_FOR_SALE", limit: 1 })}`));
+    const versions = list(await deps.get(`/v1/apps/${enc5(app)}/appStoreVersions${qs3({ "filter[appStoreState]": "READY_FOR_SALE", limit: 1 })}`));
     if (versions[0]) {
       template = versions[0].versionString;
       relationships.appStoreVersionTemplate = { data: { type: "appStoreVersions", id: versions[0].id } };
@@ -38768,7 +38962,7 @@ async function prepareCreateCustomPage(deps, { appId: appId2, name, locale = "en
       }
     ]
   };
-  const preview = await prepareChange({ op: opFor3("POST", "/v1/appCustomProductPages"), body, deps });
+  const preview = await prepareChange({ op: opFor4("POST", "/v1/appCustomProductPages"), body, deps });
   return {
     page: name,
     locale,
@@ -38783,13 +38977,13 @@ async function prepareEditCustomPageText(deps, { appId: appId2, page, locale = "
   const p = await findPage(deps, app, page);
   const draft = (await pageVersions(deps, p.id)).find((v) => ["PREPARE_FOR_SUBMISSION", "REJECTED"].includes(v.state));
   if (!draft) throw new Error(`"${p.name}" has no editable draft.`);
-  const locs = list(await deps.get(`/v1/appCustomProductPageVersions/${enc4(draft.id)}/appCustomProductPageLocalizations${qs3({ limit: 50 })}`));
+  const locs = list(await deps.get(`/v1/appCustomProductPageVersions/${enc5(draft.id)}/appCustomProductPageLocalizations${qs3({ limit: 50 })}`));
   const hit = locs.find((l) => l.locale === locale);
   if (hit) {
     return {
       page: p.name,
       ...await prepareChange({
-        op: opFor3("PATCH", "/v1/appCustomProductPageLocalizations/{id}"),
+        op: opFor4("PATCH", "/v1/appCustomProductPageLocalizations/{id}"),
         pathParams: { id: hit.id },
         body: { data: { type: "appCustomProductPageLocalizations", id: hit.id, attributes: { promotionalText } } },
         deps
@@ -38800,7 +38994,7 @@ async function prepareEditCustomPageText(deps, { appId: appId2, page, locale = "
     page: p.name,
     creatingNewLocale: true,
     ...await prepareChange({
-      op: opFor3("POST", "/v1/appCustomProductPageLocalizations"),
+      op: opFor4("POST", "/v1/appCustomProductPageLocalizations"),
       body: {
         data: {
           type: "appCustomProductPageLocalizations",
@@ -38818,7 +39012,7 @@ async function prepareSubmitCustomPage(deps, { appId: appId2, page, platform = "
   const draft = (await pageVersions(deps, p.id)).find((v) => ["PREPARE_FOR_SUBMISSION", "REJECTED"].includes(v.state));
   if (!draft) throw new Error(`"${p.name}" has no draft to submit.`);
   const open2 = list(
-    await deps.get(`/v1/apps/${enc4(app)}/reviewSubmissions${qs3({ "filter[state]": "READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES", "filter[platform]": platform, limit: 10 })}`)
+    await deps.get(`/v1/apps/${enc5(app)}/reviewSubmissions${qs3({ "filter[state]": "READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES", "filter[platform]": platform, limit: 10 })}`)
   );
   const busy = open2.find((s) => s.state !== "READY_FOR_REVIEW");
   if (busy) {
@@ -38881,7 +39075,7 @@ async function offerPrices(deps, { subscriptionId: subscriptionId2, offerMode, t
     const found = await findPricePoint(deps, { subscriptionId: subscriptionId2, territory: baseTerritory, amount });
     if (!found.match) throw new Error(`No ${baseTerritory} price point is exactly ${amount}. Nearest: ${found.nearest.map((n) => n.customerPrice).join(", ")}.`);
     pointBy.set(baseTerritory, { id: found.match.id, price: found.match.customerPrice });
-    const eq = await getAll(deps, `/v1/subscriptionPricePoints/${enc4(found.match.id)}/equalizations${qs3({ include: "territory", limit: 200 })}`, { pages: 5 });
+    const eq = await getAll(deps, `/v1/subscriptionPricePoints/${enc5(found.match.id)}/equalizations${qs3({ include: "territory", limit: 200 })}`, { pages: 5 });
     for (const pt of eq.data) {
       const t = pt.relationships?.territory?.data?.id;
       if (t && !pointBy.has(t)) pointBy.set(t, { id: pt.id, price: pt.attributes?.customerPrice });
@@ -38908,12 +39102,12 @@ function checkOfferBasics({ offerMode, duration: duration3, numberOfPeriods }) {
 }
 var offerSummary = (o) => o.offerMode === "FREE_TRIAL" ? `free for ${o.numberOfPeriods} x ${o.duration}` : o.offerMode === "PAY_UP_FRONT" ? `one payment for ${o.numberOfPeriods} x ${o.duration}` : `a reduced price each period for ${o.numberOfPeriods} x ${o.duration}`;
 async function offerCodesOverview(deps, { subscriptionId: subscriptionId2 }) {
-  const codes = list(await deps.get(`/v1/subscriptions/${enc4(subscriptionId2)}/offerCodes${qs3({ limit: 50 })}`));
+  const codes = list(await deps.get(`/v1/subscriptions/${enc5(subscriptionId2)}/offerCodes${qs3({ limit: 50 })}`));
   const out = [];
   for (const c of codes) {
     const [oneTime, custom2] = await Promise.all([
-      deps.get(`/v1/subscriptionOfferCodes/${enc4(c.id)}/oneTimeUseCodes${qs3({ limit: 50 })}`).catch(() => ({ data: [] })),
-      deps.get(`/v1/subscriptionOfferCodes/${enc4(c.id)}/customCodes${qs3({ limit: 50 })}`).catch(() => ({ data: [] }))
+      deps.get(`/v1/subscriptionOfferCodes/${enc5(c.id)}/oneTimeUseCodes${qs3({ limit: 50 })}`).catch(() => ({ data: [] })),
+      deps.get(`/v1/subscriptionOfferCodes/${enc5(c.id)}/customCodes${qs3({ limit: 50 })}`).catch(() => ({ data: [] }))
     ]);
     out.push({
       id: c.id,
@@ -38937,7 +39131,7 @@ async function prepareCreateOfferCode(deps, { subscriptionId: subscriptionId2, n
   const prices = await offerPrices(deps, { subscriptionId: subscriptionId2, offerMode, territories, amount, priceType: "subscriptionOfferCodePrices" });
   const attributes = { name, customerEligibilities, offerEligibility, offerMode, duration: duration3, numberOfPeriods };
   const preview = await prepareChange({
-    op: opFor3("POST", "/v1/subscriptionOfferCodes"),
+    op: opFor4("POST", "/v1/subscriptionOfferCodes"),
     body: {
       data: {
         type: "subscriptionOfferCodes",
@@ -38965,7 +39159,7 @@ async function prepareGenerateOfferCodes(deps, { offerCodeId, numberOfCodes, exp
     return {
       kind: `custom code "${customCode}", redeemable ${numberOfCodes} time(s)`,
       ...await prepareChange({
-        op: opFor3("POST", "/v1/subscriptionOfferCodeCustomCodes"),
+        op: opFor4("POST", "/v1/subscriptionOfferCodeCustomCodes"),
         body: {
           data: {
             type: "subscriptionOfferCodeCustomCodes",
@@ -38982,7 +39176,7 @@ async function prepareGenerateOfferCodes(deps, { offerCodeId, numberOfCodes, exp
     kind: `${numberOfCodes} one-time code(s), expiring ${expirationDate}`,
     note: "Download the code values in App Store Connect once Apple has generated them.",
     ...await prepareChange({
-      op: opFor3("POST", "/v1/subscriptionOfferCodeOneTimeUseCodes"),
+      op: opFor4("POST", "/v1/subscriptionOfferCodeOneTimeUseCodes"),
       body: {
         data: {
           type: "subscriptionOfferCodeOneTimeUseCodes",
@@ -38997,7 +39191,7 @@ async function prepareGenerateOfferCodes(deps, { offerCodeId, numberOfCodes, exp
 async function prepareSetOfferCodeActive(deps, { offerCodeId, active }) {
   if (typeof active !== "boolean") throw new Error("Pass active: true or false.");
   return prepareChange({
-    op: opFor3("PATCH", "/v1/subscriptionOfferCodes/{id}"),
+    op: opFor4("PATCH", "/v1/subscriptionOfferCodes/{id}"),
     pathParams: { id: offerCodeId },
     body: { data: { type: "subscriptionOfferCodes", id: offerCodeId, attributes: { active } } },
     deps
@@ -39010,7 +39204,7 @@ async function prepareCreatePromotionalOffer(deps, { subscriptionId: subscriptio
   const prices = await offerPrices(deps, { subscriptionId: subscriptionId2, offerMode, territories, amount, priceType: "subscriptionPromotionalOfferPrices" });
   const attributes = { name, offerCode, offerMode, duration: duration3, numberOfPeriods };
   const preview = await prepareChange({
-    op: opFor3("POST", "/v1/subscriptionPromotionalOffers"),
+    op: opFor4("POST", "/v1/subscriptionPromotionalOffers"),
     body: {
       data: {
         type: "subscriptionPromotionalOffers",
@@ -39068,7 +39262,7 @@ async function prepareCreateWinBackOffer(deps, {
     promotionIntent: promote ? "USE_AUTO_GENERATED_ASSETS" : "NOT_PROMOTED"
   };
   const preview = await prepareChange({
-    op: opFor3("POST", "/v1/winBackOffers"),
+    op: opFor4("POST", "/v1/winBackOffers"),
     body: {
       data: {
         type: "winBackOffers",
@@ -39089,12 +39283,12 @@ async function prepareCreateWinBackOffer(deps, {
 }
 
 // extras.js
-var enc5 = encodeURIComponent;
+var enc6 = encodeURIComponent;
 var qs4 = (o) => {
   const e = Object.entries(o).filter(([, v]) => v !== void 0 && v !== null && v !== "");
-  return e.length ? `?${e.map(([k, v]) => `${k}=${enc5(String(v))}`).join("&")}` : "";
+  return e.length ? `?${e.map(([k, v]) => `${k}=${enc6(String(v))}`).join("&")}` : "";
 };
-var opFor4 = (method, path8) => {
+var opFor5 = (method, path8) => {
   const op = findOperation(method, path8);
   if (!op) throw new Error(`Apple's API has no ${method} ${path8}.`);
   return op;
@@ -39104,7 +39298,7 @@ var HIDDEN = "(hidden)";
 async function reviewInbox(deps, { appId: appId2, limit = 20, unrepliedOnly = true }) {
   const app = await resolveApp(deps, appId2);
   const body = await deps.get(
-    `/v1/apps/${enc5(app)}/customerReviews${qs4({ sort: "-createdDate", include: "response", limit: Math.min(200, Math.max(50, limit * 3)) })}`
+    `/v1/apps/${enc6(app)}/customerReviews${qs4({ sort: "-createdDate", include: "response", limit: Math.min(200, Math.max(50, limit * 3)) })}`
   );
   const responses = new Map((body.included || []).filter((i) => i.type === "customerReviewResponses").map((r) => [r.id, flat(r)]));
   const rows = (body.data || []).map((r) => {
@@ -39132,19 +39326,19 @@ async function prepareReplyToReview(deps, { reviewId, text }) {
   if (text.length > 5970) throw new Error(`The reply is ${text.length} characters; Apple allows at most 5970.`);
   let review;
   try {
-    review = flat((await deps.get(`/v1/customerReviews/${enc5(reviewId)}`)).data);
+    review = flat((await deps.get(`/v1/customerReviews/${enc6(reviewId)}`)).data);
   } catch {
     throw new Error(`Review ${reviewId} was not found.`);
   }
   let existing = null;
   try {
-    const r = await deps.get(`/v1/customerReviews/${enc5(reviewId)}/response`);
+    const r = await deps.get(`/v1/customerReviews/${enc6(reviewId)}/response`);
     existing = r.data ? flat(r.data) : null;
   } catch {
     existing = null;
   }
   const preview = await prepareChange({
-    op: opFor4("POST", "/v1/customerReviewResponses"),
+    op: opFor5("POST", "/v1/customerReviewResponses"),
     body: {
       data: {
         type: "customerReviewResponses",
@@ -39199,7 +39393,7 @@ async function prepareReviewDetails(deps, { appId: appId2, version: version2, fi
   const v = await findVersion(deps, { appId: app, version: version2, platform, mode: "editable" });
   let detail = null;
   try {
-    const r = await deps.get(`/v1/appStoreVersions/${enc5(v.id)}/appStoreReviewDetail`);
+    const r = await deps.get(`/v1/appStoreVersions/${enc6(v.id)}/appStoreReviewDetail`);
     detail = r.data ? flat(r.data) : null;
   } catch {
     detail = null;
@@ -39207,7 +39401,7 @@ async function prepareReviewDetails(deps, { appId: appId2, version: version2, fi
   const context = { version: v.versionString, versionState: v.appStoreState || v.appVersionState };
   if (detail) {
     const preview2 = await prepareChange({
-      op: opFor4("PATCH", "/v1/appStoreReviewDetails/{id}"),
+      op: opFor5("PATCH", "/v1/appStoreReviewDetails/{id}"),
       pathParams: { id: detail.id },
       body: { data: { type: "appStoreReviewDetails", id: detail.id, attributes: attrs } },
       deps
@@ -39215,7 +39409,7 @@ async function prepareReviewDetails(deps, { appId: appId2, version: version2, fi
     return { ...context, ...maskReviewPreview(preview2) };
   }
   const preview = await prepareChange({
-    op: opFor4("POST", "/v1/appStoreReviewDetails"),
+    op: opFor5("POST", "/v1/appStoreReviewDetails"),
     body: {
       data: {
         type: "appStoreReviewDetails",
@@ -39243,7 +39437,7 @@ function checkInfoFields(fields) {
 async function prepareAppInfo(deps, { appId: appId2, locale = "en-US", fields }) {
   const attrs = checkInfoFields(fields);
   const app = await resolveApp(deps, appId2);
-  const infos = list(await deps.get(`/v1/apps/${enc5(app)}/appInfos${qs4({ limit: 10 })}`));
+  const infos = list(await deps.get(`/v1/apps/${enc6(app)}/appInfos${qs4({ limit: 10 })}`));
   const stateOf4 = (i) => i.appStoreState || i.state;
   const editable = infos.find((i) => EDITABLE_VERSION_STATES.has(stateOf4(i)));
   if (!editable) {
@@ -39251,12 +39445,12 @@ async function prepareAppInfo(deps, { appId: appId2, locale = "en-US", fields })
       `App info can only be changed while a version is being prepared. Current states: ${infos.map((i) => stateOf4(i)).join(", ") || "none"}. Create the next version first (asc_create_version).`
     );
   }
-  const locs = list(await deps.get(`/v1/appInfos/${enc5(editable.id)}/appInfoLocalizations${qs4({ limit: 50 })}`));
+  const locs = list(await deps.get(`/v1/appInfos/${enc6(editable.id)}/appInfoLocalizations${qs4({ limit: 50 })}`));
   const hit = locs.find((l) => l.locale === locale);
   const context = { appInfoState: stateOf4(editable), locale };
   if (hit) {
     const preview2 = await prepareChange({
-      op: opFor4("PATCH", "/v1/appInfoLocalizations/{id}"),
+      op: opFor5("PATCH", "/v1/appInfoLocalizations/{id}"),
       pathParams: { id: hit.id },
       body: { data: { type: "appInfoLocalizations", id: hit.id, attributes: attrs } },
       deps
@@ -39265,7 +39459,7 @@ async function prepareAppInfo(deps, { appId: appId2, locale = "en-US", fields })
   }
   if (!attrs.name) throw new Error(`No ${locale} app info exists yet; creating one needs a name.`);
   const preview = await prepareChange({
-    op: opFor4("POST", "/v1/appInfoLocalizations"),
+    op: opFor5("POST", "/v1/appInfoLocalizations"),
     body: {
       data: {
         type: "appInfoLocalizations",
@@ -39278,7 +39472,7 @@ async function prepareAppInfo(deps, { appId: appId2, locale = "en-US", fields })
   return { ...context, creatingNewLocale: true, existingLocales: locs.map((l) => l.locale), ...preview };
 }
 async function findGroup(deps, app, group) {
-  const groups = list(await deps.get(`/v1/apps/${enc5(app)}/betaGroups${qs4({ limit: 50 })}`));
+  const groups = list(await deps.get(`/v1/apps/${enc6(app)}/betaGroups${qs4({ limit: 50 })}`));
   const hit = groups.find((g) => g.id === group || g.name === group);
   if (!hit) throw new Error(`No TestFlight group "${group}". Groups: ${groups.map((g) => g.name).join(", ") || "none"}.`);
   return hit;
@@ -39291,12 +39485,12 @@ async function findBuild(deps, app, buildNumber) {
 }
 async function testflightOverview(deps, { appId: appId2 }) {
   const app = await resolveApp(deps, appId2);
-  const groups = list(await deps.get(`/v1/apps/${enc5(app)}/betaGroups${qs4({ limit: 50 })}`));
+  const groups = list(await deps.get(`/v1/apps/${enc6(app)}/betaGroups${qs4({ limit: 50 })}`));
   const out = [];
   for (const g of groups) {
     const [testers, builds] = await Promise.all([
-      deps.get(`/v1/betaGroups/${enc5(g.id)}/betaTesters${qs4({ limit: 1 })}`).catch(() => null),
-      deps.get(`/v1/betaGroups/${enc5(g.id)}/builds${qs4({ limit: 5 })}`).catch(() => null)
+      deps.get(`/v1/betaGroups/${enc6(g.id)}/betaTesters${qs4({ limit: 1 })}`).catch(() => null),
+      deps.get(`/v1/betaGroups/${enc6(g.id)}/builds${qs4({ limit: 5 })}`).catch(() => null)
     ]);
     out.push({
       id: g.id,
@@ -39315,14 +39509,14 @@ async function prepareTestflightNotes(deps, { appId: appId2, buildNumber, locale
   if (whatsNew.length > 4e3) throw new Error(`whatsNew is ${whatsNew.length} characters; TestFlight allows at most 4000.`);
   const app = await resolveApp(deps, appId2);
   const build = await findBuild(deps, app, buildNumber);
-  const locs = list(await deps.get(`/v1/builds/${enc5(build.id)}/betaBuildLocalizations${qs4({ limit: 50 })}`));
+  const locs = list(await deps.get(`/v1/builds/${enc6(build.id)}/betaBuildLocalizations${qs4({ limit: 50 })}`));
   const hit = locs.find((l) => l.locale === locale);
   const context = { build: build.version, locale };
   if (hit) {
     return {
       ...context,
       ...await prepareChange({
-        op: opFor4("PATCH", "/v1/betaBuildLocalizations/{id}"),
+        op: opFor5("PATCH", "/v1/betaBuildLocalizations/{id}"),
         pathParams: { id: hit.id },
         body: { data: { type: "betaBuildLocalizations", id: hit.id, attributes: { whatsNew } } },
         deps
@@ -39333,7 +39527,7 @@ async function prepareTestflightNotes(deps, { appId: appId2, buildNumber, locale
     ...context,
     creatingNewLocale: true,
     ...await prepareChange({
-      op: opFor4("POST", "/v1/betaBuildLocalizations"),
+      op: opFor5("POST", "/v1/betaBuildLocalizations"),
       body: {
         data: {
           type: "betaBuildLocalizations",
@@ -39359,7 +39553,7 @@ async function prepareAddTester(deps, { appId: appId2, email: email3, firstName,
   const note = g.isInternalGroup ? "Internal group: the person must already be a user on your App Store Connect team." : "External group: Apple emails this person an invitation to TestFlight.";
   if (existing) {
     const preview2 = await prepareChange({
-      op: opFor4("POST", "/v1/betaGroups/{id}/relationships/betaTesters"),
+      op: opFor5("POST", "/v1/betaGroups/{id}/relationships/betaTesters"),
       pathParams: { id: g.id },
       body: { data: [{ type: "betaTesters", id: existing.id }] },
       deps
@@ -39370,7 +39564,7 @@ async function prepareAddTester(deps, { appId: appId2, email: email3, firstName,
   if (firstName) attributes.firstName = firstName;
   if (lastName) attributes.lastName = lastName;
   const preview = await prepareChange({
-    op: opFor4("POST", "/v1/betaTesters"),
+    op: opFor5("POST", "/v1/betaTesters"),
     body: {
       data: {
         type: "betaTesters",
@@ -39389,7 +39583,7 @@ async function prepareAddBuildToGroup(deps, { appId: appId2, buildNumber, group 
   if (build.processingState !== "VALID") throw new Error(`Build ${buildNumber} is ${build.processingState}, not VALID yet.`);
   if (build.expired) throw new Error(`Build ${buildNumber} has expired.`);
   const preview = await prepareChange({
-    op: opFor4("POST", "/v1/betaGroups/{id}/relationships/builds"),
+    op: opFor5("POST", "/v1/betaGroups/{id}/relationships/builds"),
     pathParams: { id: g.id },
     body: { data: [{ type: "builds", id: build.id }] },
     deps
@@ -39412,7 +39606,7 @@ async function prepareBetaReview(deps, { appId: appId2, buildNumber }) {
   }
   let existing = null;
   try {
-    const sub = await deps.get(`/v1/builds/${enc5(build.id)}/betaAppReviewSubmission`);
+    const sub = await deps.get(`/v1/builds/${enc6(build.id)}/betaAppReviewSubmission`);
     existing = sub?.data ? { id: sub.data.id, state: sub.data.attributes?.betaReviewState } : null;
   } catch {
     existing = null;
@@ -39426,17 +39620,17 @@ async function prepareBetaReview(deps, { appId: appId2, buildNumber }) {
       reason: `Build ${build.version} was already submitted for beta review (state: ${existing.state}).`
     };
   }
-  const notes = list(await deps.get(`/v1/builds/${enc5(build.id)}/betaBuildLocalizations${qs4({ limit: 50 })}`));
+  const notes = list(await deps.get(`/v1/builds/${enc6(build.id)}/betaBuildLocalizations${qs4({ limit: 50 })}`));
   if (!notes.some((n) => (n.whatsNew || "").trim())) {
     problems.push('No "What to Test" notes on this build. Add them with asc_testflight_set_notes.');
   }
-  const appInfo = list(await deps.get(`/v1/apps/${enc5(app)}/betaAppLocalizations${qs4({ limit: 50 })}`));
+  const appInfo = list(await deps.get(`/v1/apps/${enc6(app)}/betaAppLocalizations${qs4({ limit: 50 })}`));
   if (!appInfo.some((l) => (l.description || "").trim() && (l.feedbackEmail || "").trim())) {
     problems.push("The TestFlight app description and feedback email are not filled in (Test Information in App Store Connect).");
   }
   let detail = null;
   try {
-    const d = await deps.get(`/v1/apps/${enc5(app)}/betaAppReviewDetail`);
+    const d = await deps.get(`/v1/apps/${enc6(app)}/betaAppReviewDetail`);
     detail = d?.data?.attributes || null;
   } catch {
     detail = null;
@@ -39450,7 +39644,7 @@ async function prepareBetaReview(deps, { appId: appId2, buildNumber }) {
     return { allowed: false, build: build.version, readyForBetaReview: false, problems, note: "Nothing was prepared. Fix these first, then ask again." };
   }
   const preview = await prepareChange({
-    op: opFor4("POST", "/v1/betaAppReviewSubmissions"),
+    op: opFor5("POST", "/v1/betaAppReviewSubmissions"),
     body: { data: { type: "betaAppReviewSubmissions", relationships: { build: { data: { type: "builds", id: build.id } } } } },
     deps
   });
@@ -39466,11 +39660,11 @@ async function prepareRemoveTester(deps, { appId: appId2, email: email3, group }
   if (!group) throw new Error("Pass group (the TestFlight group name or id).");
   const app = await resolveApp(deps, appId2);
   const g = await findGroup(deps, app, group);
-  const members2 = list(await deps.get(`/v1/betaGroups/${enc5(g.id)}/betaTesters${qs4({ limit: 200 })}`));
+  const members2 = list(await deps.get(`/v1/betaGroups/${enc6(g.id)}/betaTesters${qs4({ limit: 200 })}`));
   const hit = members2.find((t) => String(t.email || "").toLowerCase() === email3.toLowerCase());
   if (!hit) throw new Error(`${email3} is not in the TestFlight group "${g.name}".`);
   const preview = await prepareChange({
-    op: opFor4("DELETE", "/v1/betaGroups/{id}/relationships/betaTesters"),
+    op: opFor5("DELETE", "/v1/betaGroups/{id}/relationships/betaTesters"),
     pathParams: { id: g.id },
     body: { data: [{ type: "betaTesters", id: hit.id }] },
     deps
@@ -39487,7 +39681,7 @@ async function prepareExpireBuild(deps, { appId: appId2, buildNumber }) {
   const build = await findBuild(deps, app, buildNumber);
   if (build.expired) throw new Error(`Build ${build.version} has already expired.`);
   const preview = await prepareChange({
-    op: opFor4("PATCH", "/v1/builds/{id}"),
+    op: opFor5("PATCH", "/v1/builds/{id}"),
     pathParams: { id: build.id },
     body: { data: { type: "builds", id: build.id, attributes: { expired: true } } },
     deps
@@ -39553,7 +39747,7 @@ function simplify(body) {
 var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(value, null, 2)) }] });
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
-var server = new McpServer({ name: "hypercaffium-apple", version: "0.12.0" });
+var server = new McpServer({ name: "hypercaffium-apple", version: "0.13.0" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();
@@ -39609,10 +39803,10 @@ readTool(
       }
       id = apps[0].id;
     }
-    const enc6 = encodeURIComponent(id);
+    const enc7 = encodeURIComponent(id);
     const [appBody, versionsBody, buildsBody] = await Promise.all([
-      ascGet(`/v1/apps/${enc6}`),
-      ascGet(`/v1/apps/${enc6}/appStoreVersions`, { limit: 20 }),
+      ascGet(`/v1/apps/${enc7}`),
+      ascGet(`/v1/apps/${enc7}/appStoreVersions`, { limit: 20 }),
       ascGet("/v1/builds", { "filter[app]": id, sort: "-uploadedDate", limit: 3 })
     ]);
     const versions = flattenList(versionsBody);
@@ -40286,6 +40480,80 @@ featureTool(
   "Prepare expiring a TestFlight build so testers can no longer install it. Cannot be undone. Tier 2.",
   { appId, buildNumber: external_exports.string().describe("Build number, e.g. 57") },
   (a) => prepareExpireBuild(writeDeps, a)
+);
+readTool(
+  "asc_team_overview",
+  "Who is on the App Store Connect team (names, emails, roles, app access) and pending invitations. Read-only. Needs a key with the Admin role to see everyone.",
+  {},
+  () => teamOverview(writeDeps)
+);
+readTool(
+  "asc_signing_overview",
+  "Signing assets: certificates (type, expiry), provisioning profiles, registered devices and bundle IDs. Read-only.",
+  {},
+  () => signingOverview(writeDeps)
+);
+featureTool(
+  "users",
+  "asc_invite_user",
+  "CRITICAL. Prepare inviting someone to the App Store Connect team with specific roles and app access (default: only this app). Warns about powerful roles. Apply with asc_apply_sensitive_change after the owner says yes.",
+  {
+    email: external_exports.string(),
+    firstName: external_exports.string(),
+    lastName: external_exports.string(),
+    roles: external_exports.array(external_exports.enum(ROLES)).min(1),
+    allAppsVisible: external_exports.boolean().default(false),
+    appIds: external_exports.array(external_exports.string()).optional().describe("Apps they may see (default: this app)"),
+    provisioningAllowed: external_exports.boolean().default(false).describe("Developers only: may create certificates and profiles")
+  },
+  (a) => prepareInviteUser(writeDeps, a)
+);
+featureTool(
+  "users",
+  "asc_change_user",
+  "CRITICAL. Prepare changing a team member's roles or app access. The Account Holder cannot be changed. Apply with asc_apply_sensitive_change.",
+  {
+    email: external_exports.string(),
+    roles: external_exports.array(external_exports.enum(ROLES)).optional(),
+    allAppsVisible: external_exports.boolean().optional(),
+    appIds: external_exports.array(external_exports.string()).optional()
+  },
+  (a) => prepareChangeUser(writeDeps, a)
+);
+featureTool(
+  "users",
+  "asc_remove_user",
+  "CRITICAL. Prepare removing a team member (they lose access at once) or cancelling their pending invitation. The Account Holder cannot be removed. Apply with asc_apply_sensitive_change.",
+  { email: external_exports.string() },
+  (a) => prepareRemoveUser(writeDeps, a)
+);
+featureTool(
+  "signing",
+  "asc_register_device",
+  "CRITICAL. Prepare registering a test device (UDID) for development or ad hoc builds. Apply with asc_apply_sensitive_change.",
+  { name: external_exports.string(), udid: external_exports.string(), platform: external_exports.enum(["IOS", "MAC_OS", "UNIVERSAL"]).default("IOS") },
+  (a) => prepareRegisterDevice(writeDeps, a)
+);
+featureTool(
+  "signing",
+  "asc_set_device_enabled",
+  "CRITICAL. Prepare enabling or disabling a registered device. Apply with asc_apply_sensitive_change.",
+  { deviceId: external_exports.string().describe("From asc_signing_overview"), enabled: external_exports.boolean() },
+  (a) => prepareSetDeviceEnabled(writeDeps, a)
+);
+featureTool(
+  "signing",
+  "asc_revoke_certificate",
+  "CRITICAL. Prepare revoking a signing certificate. Cannot be undone, and can break builds made by EAS or Xcode until they create a new one. Apply with asc_apply_sensitive_change.",
+  { certificateId: external_exports.string().describe("From asc_signing_overview") },
+  (a) => prepareRevokeCertificate(writeDeps, a)
+);
+featureTool(
+  "signing",
+  "asc_delete_profile",
+  "CRITICAL. Prepare deleting a provisioning profile. Cannot be undone; EAS or Xcode recreates one on the next build. Apply with asc_apply_sensitive_change.",
+  { profileId: external_exports.string().describe("From asc_signing_overview") },
+  (a) => prepareDeleteProfile(writeDeps, a)
 );
 readTool(
   "asc_prepare_plan",

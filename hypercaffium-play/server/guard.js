@@ -72,7 +72,8 @@ export function assertWriteAllowed(method, pathname, features = currentFeatures(
     allowed =
       (APP_PATH.test(pathname) && !/\/users(\/|$)|\/grants(\/|$)/.test(pathname)) || (Boolean(features.users) && DEV_USERS.test(pathname));
   }
-  else if (method === 'DELETE') allowed = DELETE_EDIT.test(pathname) || IMAGE_SET.test(pathname); // discard an edit, or clear one image set inside it
+  // discard an edit, clear one image set inside it, or (users feature on) remove a team member or their access to one app
+  else if (method === 'DELETE') allowed = DELETE_EDIT.test(pathname) || IMAGE_SET.test(pathname) || (Boolean(features.users) && DEV_USERS.test(pathname));
   if (!allowed) throw new Error(`Blocked by safety guard: ${method} ${pathname} is not an allowed change.`);
 }
 

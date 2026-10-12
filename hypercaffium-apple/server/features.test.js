@@ -91,10 +91,23 @@ test('critical features are off by default, and when switched on they are Tier 2
   }
 });
 
-test('deletes stay blocked even when a critical feature is on', async () => {
-  setFeatureSource(() => ({ users: true }));
-  const v = await classify(find('DELETE', '/v1/users/{id}'), '/v1/users/x', lookupState('X'));
-  assert.equal(v.tier, 3);
+test('critical deletes: blocked while their feature is off; when on, Tier 2 and sensitive; other deletes stay blocked', async () => {
+  const cases = [
+    ['users', '/v1/users/{id}', '/v1/users/x'],
+    ['users', '/v1/userInvitations/{id}', '/v1/userInvitations/x'],
+    ['signing', '/v1/certificates/{id}', '/v1/certificates/x'],
+    ['signing', '/v1/profiles/{id}', '/v1/profiles/x'],
+  ];
+  for (const [feature, tplPath, path] of cases) {
+    setFeatureSource(() => ({}));
+    assert.equal((await classify(find('DELETE', tplPath), path, lookupState('X'))).tier, 3, `${path} with ${feature} off`);
+    setFeatureSource(() => ({ [feature]: true }));
+    const v = await classify(find('DELETE', tplPath), path, lookupState('X'));
+    assert.equal(v.tier, 2, `${path} with ${feature} on`);
+    assert.equal(v.sensitive, true);
+  }
+  setFeatureSource(() => ({ users: true, signing: true }));
+  assert.equal((await classify(find('DELETE', '/v1/bundleIds/{id}'), '/v1/bundleIds/x', lookupState('X'))).tier, 3, 'bundle IDs are never deleted');
 });
 
 test('a sensitive ticket can only be applied with the sensitive apply tool', async () => {

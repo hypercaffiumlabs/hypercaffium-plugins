@@ -31,6 +31,18 @@ import {
 import { prepareAppPreviews, prepareClearScreenshots, prepareScreenshots, runScreenshots } from './screenshots.js';
 import { prepareUploadBuild, runBuildUpload } from './builds.js';
 import {
+  prepareChangeUser,
+  prepareDeleteProfile,
+  prepareInviteUser,
+  prepareRegisterDevice,
+  prepareRemoveUser,
+  prepareRevokeCertificate,
+  prepareSetDeviceEnabled,
+  ROLES,
+  signingOverview,
+  teamOverview,
+} from './critical.js';
+import {
   customPagesOverview,
   DURATIONS,
   offerCodesOverview,
@@ -137,7 +149,7 @@ const ok = (value) => ({ content: [{ type: 'text', text: limitText(JSON.stringif
 const fail = (err) => ({ isError: true, content: [{ type: 'text', text: String(err.message || err) }] });
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 
-const server = new McpServer({ name: 'hypercaffium-apple', version: '0.12.0' });
+const server = new McpServer({ name: 'hypercaffium-apple', version: '0.13.0' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -940,6 +952,92 @@ featureTool(
   'Prepare expiring a TestFlight build so testers can no longer install it. Cannot be undone. Tier 2.',
   { appId, buildNumber: z.string().describe('Build number, e.g. 57') },
   (a) => prepareExpireBuild(writeDeps, a),
+);
+
+// ---- CRITICAL: team members and signing (switched off unless the owner enabled them) ----
+// Reading is always allowed; every change is sensitive (asc_apply_sensitive_change only).
+
+readTool(
+  'asc_team_overview',
+  'Who is on the App Store Connect team (names, emails, roles, app access) and pending invitations. Read-only. Needs a key with the Admin role to see everyone.',
+  {},
+  () => teamOverview(writeDeps),
+);
+
+readTool(
+  'asc_signing_overview',
+  'Signing assets: certificates (type, expiry), provisioning profiles, registered devices and bundle IDs. Read-only.',
+  {},
+  () => signingOverview(writeDeps),
+);
+
+featureTool(
+  'users',
+  'asc_invite_user',
+  'CRITICAL. Prepare inviting someone to the App Store Connect team with specific roles and app access (default: only this app). Warns about powerful roles. Apply with asc_apply_sensitive_change after the owner says yes.',
+  {
+    email: z.string(),
+    firstName: z.string(),
+    lastName: z.string(),
+    roles: z.array(z.enum(ROLES)).min(1),
+    allAppsVisible: z.boolean().default(false),
+    appIds: z.array(z.string()).optional().describe('Apps they may see (default: this app)'),
+    provisioningAllowed: z.boolean().default(false).describe('Developers only: may create certificates and profiles'),
+  },
+  (a) => prepareInviteUser(writeDeps, a),
+);
+
+featureTool(
+  'users',
+  'asc_change_user',
+  'CRITICAL. Prepare changing a team member\'s roles or app access. The Account Holder cannot be changed. Apply with asc_apply_sensitive_change.',
+  {
+    email: z.string(),
+    roles: z.array(z.enum(ROLES)).optional(),
+    allAppsVisible: z.boolean().optional(),
+    appIds: z.array(z.string()).optional(),
+  },
+  (a) => prepareChangeUser(writeDeps, a),
+);
+
+featureTool(
+  'users',
+  'asc_remove_user',
+  'CRITICAL. Prepare removing a team member (they lose access at once) or cancelling their pending invitation. The Account Holder cannot be removed. Apply with asc_apply_sensitive_change.',
+  { email: z.string() },
+  (a) => prepareRemoveUser(writeDeps, a),
+);
+
+featureTool(
+  'signing',
+  'asc_register_device',
+  'CRITICAL. Prepare registering a test device (UDID) for development or ad hoc builds. Apply with asc_apply_sensitive_change.',
+  { name: z.string(), udid: z.string(), platform: z.enum(['IOS', 'MAC_OS', 'UNIVERSAL']).default('IOS') },
+  (a) => prepareRegisterDevice(writeDeps, a),
+);
+
+featureTool(
+  'signing',
+  'asc_set_device_enabled',
+  'CRITICAL. Prepare enabling or disabling a registered device. Apply with asc_apply_sensitive_change.',
+  { deviceId: z.string().describe('From asc_signing_overview'), enabled: z.boolean() },
+  (a) => prepareSetDeviceEnabled(writeDeps, a),
+);
+
+featureTool(
+  'signing',
+  'asc_revoke_certificate',
+  'CRITICAL. Prepare revoking a signing certificate. Cannot be undone, and can break builds made by EAS or Xcode until they create a new one. Apply with asc_apply_sensitive_change.',
+  { certificateId: z.string().describe('From asc_signing_overview') },
+  (a) => prepareRevokeCertificate(writeDeps, a),
+);
+
+featureTool(
+  'signing',
+  'asc_delete_profile',
+  'CRITICAL. Prepare deleting a provisioning profile. Cannot be undone; EAS or Xcode recreates one on the next build. Apply with asc_apply_sensitive_change.',
+  { profileId: z.string().describe('From asc_signing_overview') },
+  (a) => prepareDeleteProfile(writeDeps, a),
 );
 
 // ---- generic multi-step plans, and monitoring ---------------------------------

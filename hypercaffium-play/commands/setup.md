@@ -12,6 +12,7 @@ Walk the owner through setting up the hypercaffium-play plugin. Plain English, s
    - In Google Cloud Console: create (or pick) a project, enable the **Google Play Android Developer API**, then IAM and Admin > Service Accounts > create one and add a **JSON key**. Suggest keeping the file in a folder such as `C:\Users\<name>\GoogleKeys\` or `~/GoogleKeys/`.
    - In Play Console: Users and permissions > Invite new users > the service account's email. Grant app permissions for the app, starting with the least needed (viewing app information is enough to read). Remind them that Play asks "Are you sure?" after Save, and nothing is saved until they click Yes.
    - Ask for the full path to the JSON key file, the app's package name (for example com.example.app), and their time zone if it differs from this computer's.
+   - Optional: if they want the team tools, ask for their developer account ID (the long number after /developers/ in the Play Console web address) and save it as developerId.
    - Save them with `play_save_settings` (it escapes paths correctly). Never ask for or display the contents of the key file.
    - Run `play_check_setup` and confirm Google accepted the key. A new service account can take up to a day to start working; if it fails, explain the problem it reports.
 
