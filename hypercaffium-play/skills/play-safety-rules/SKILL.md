@@ -50,7 +50,7 @@ The tools check the version code was really uploaded (builds arrive from your ow
 
 ### App bundles
 
-`play_upload_bundle` uploads an .aab (and optionally mapping.txt) and places it on a track in ONE edit; production uploads are always a draft. Only with the "uploads" switch on; most owners upload with EAS or Gradle, so ask before suggesting it.
+`play_upload_bundle` uploads an .aab (and optionally mapping.txt) and places it on a track in ONE edit; only internal, alpha and beta can go live straight from an upload; on any other track (production included) it is a draft. Only with the "uploads" switch on; most owners upload with EAS or Gradle, so ask before suggesting it.
 
 ### Testers
 

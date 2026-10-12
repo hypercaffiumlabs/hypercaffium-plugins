@@ -86,6 +86,7 @@ test('bundle upload: production is always a draft, and keeps serving the live re
   const dir = tmp();
   const d = fake();
   await assert.rejects(prepareUploadBundle(d, { file: aab(dir), track: 'production', status: 'completed' }), /always a DRAFT/);
+  await assert.rejects(prepareUploadBundle(d, { file: aab(dir), track: 'my-closed-track', status: 'completed' }), /always a DRAFT/);
   const p = await prepareUploadBundle(d, { file: aab(dir), track: 'production' });
   assert.match(p.tierReason, /DRAFT/);
   await applyChange({ ticketId: p.ticket, deps: d });
@@ -189,4 +190,30 @@ test('review fix: if the track changed after the preview, nothing is committed',
   assert.match(out.error, /changed since the preview/);
   assert.ok(!d.calls.some((c) => c[0] === 'PUT'), 'the track was never written');
   assert.ok(d.calls.some((c) => c[0] === 'DELETE' && c[1] === '/edits/E1'), 'the edit (and the uploaded bundle) was discarded');
+});
+
+test('review fix 2: only internal, alpha and beta take a direct release; anything else is a draft', async () => {
+  const dir = tmp();
+  for (const track of ['production', 'Production', 'my-closed-track', 'wear-production']) {
+    const p = await prepareUploadBundle(fake(), { file: aab(dir), track });
+    assert.match(p.title, /draft release/, track);
+  }
+  for (const track of ['internal', 'Beta', 'alpha']) {
+    const p = await prepareUploadBundle(fake(), { file: aab(dir), track });
+    assert.match(p.title, /completed release/, track);
+  }
+});
+
+test('review fix 2: if Google names the track differently from what was asked, a direct release is refused', async () => {
+  const dir = tmp();
+  const d = fake();
+  const origGet = d.get;
+  d.get = async (p, q) => (p.includes('/tracks/') ? { track: 'production', releases: [] } : origGet(p, q));
+  const p = await prepareUploadBundle(d, { file: aab(dir), track: 'beta' });
+  assert.match(p.title, /draft release/, 'Google says it is production, so it becomes a draft');
+  const payload = { ...d.store.peek(p.ticket).payload, status: 'completed' };
+  const out = await runBundle(payload, d);
+  assert.equal(out.committed, false);
+  assert.match(out.error, /must be a draft/);
+  assert.ok(!d.calls.some((c) => c[0] === 'PUT'));
 });

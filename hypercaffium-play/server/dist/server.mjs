@@ -38065,6 +38065,8 @@ function inspect(p, { ext, max, zip }) {
   if (zip && buf.readUInt32LE(0) !== 67324752) throw new Error(`${path7.basename(p)} is not a valid app bundle (it is not a zip archive).`);
   return { path: p, name: path7.basename(p), size: st.size, sha256: crypto4.createHash("sha256").update(buf).digest("hex") };
 }
+var DIRECT_RELEASE_TRACKS = /* @__PURE__ */ new Set(["internal", "alpha", "beta"]);
+var directOk = (...names) => names.every((n) => DIRECT_RELEASE_TRACKS.has(String(n ?? "").toLowerCase()));
 function planTrack(releases, status) {
   const keep = releases.filter((r) => r.status === "completed" && status !== "completed");
   const replaced = releases.filter((r) => !keep.includes(r));
@@ -38081,17 +38083,19 @@ async function prepareUploadBundle(deps, { packageName: packageName2, file: file
   const blocked = off(["uploads", "releases"]);
   if (blocked) return blocked;
   const pkg = packageName2 || deps.defaultPackage();
-  const isProd = String(track).toLowerCase() === "production";
-  const finalStatus = isProd ? "draft" : status || "completed";
-  if (isProd && status && status !== "draft") {
-    throw new Error("Uploads to production are always a DRAFT release. Look at it, then make it live with play_set_release or play_rollout.");
+  const current = await readTrack(deps, pkg, track);
+  const direct = directOk(track, current.track);
+  const finalStatus = direct ? status || "completed" : "draft";
+  if (!direct && status && status !== "draft") {
+    throw new Error(
+      `Only the internal, alpha and beta tracks can receive a live release straight from an upload; on "${track}" it is always a DRAFT. Look at it, then make it live with play_set_release or play_rollout.`
+    );
   }
   if (!["draft", "completed", "inProgress"].includes(finalStatus)) throw new Error("status must be draft, completed or inProgress.");
   if (finalStatus === "inProgress" && !(userFraction > 0 && userFraction < 1)) throw new Error("A staged rollout needs userFraction between 0 and 1 (0.1 = 10%).");
   const notes = releaseNotes === void 0 ? void 0 : checkNotes(releaseNotes);
   const bundle = inspect(file2, { ext: ".aab", max: MAX_BUNDLE, zip: true });
   const mapping = mappingFile ? inspect(mappingFile, { ext: ".txt", max: MAX_MAPPING }) : null;
-  const current = await readTrack(deps, pkg, track);
   const { keep, replaced } = planTrack(current.releases, finalStatus);
   const live = replaced.filter((r) => r.status === "inProgress" || r.status === "halted");
   if (live.length) {
@@ -38108,7 +38112,7 @@ async function prepareUploadBundle(deps, { packageName: packageName2, file: file
     allowed: true,
     kind: "bundle",
     tier: 2,
-    tierReason: isProd ? "uploads a new version as a production DRAFT (nobody gets it until you release it)" : `uploads a new version that ${track} testers can install`,
+    tierReason: direct ? `uploads a new version that ${track} testers can install` : `uploads a new version as a DRAFT on ${track} (nobody gets it until you release it)`,
     feature: "uploads, releases",
     ticket: ticket.id,
     expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
@@ -38127,7 +38131,7 @@ async function runBundle(payload, deps) {
   const missing = ["uploads", "releases"].filter((k) => !currentFeatures()[k]);
   if (missing.length) throw new Error(`The "${missing.join('", "')}" feature was switched off since the preview, so this upload is refused.`);
   const { pkg, track, status, userFraction, notes, bundle, mapping } = payload;
-  if (String(track).toLowerCase() === "production" && status !== "draft") throw new Error("Production uploads must be a draft release.");
+  if (status !== "draft" && !directOk(track)) throw new Error(`Uploads to "${track}" must be a draft release.`);
   const steps = [];
   let edit;
   try {
@@ -38150,6 +38154,7 @@ async function runBundle(payload, deps) {
       steps.push(`attached ${mapping.name}`);
     }
     const cur = await deps.get(`${APP6}/${pkg}/edits/${edit.id}/tracks/${track}`, {});
+    if (status !== "draft" && !directOk(track, cur.track)) throw new Error(`Google reports the track as "${cur.track}"; uploads there must be a draft. Nothing was committed.`);
     if (payload.trackFingerprint !== void 0 && fingerprint(cur.releases) !== payload.trackFingerprint) {
       throw new Error(`The ${track} track changed since the preview. Nothing was committed; prepare the upload again.`);
     }
@@ -38268,7 +38273,7 @@ var ok = (value) => ({ content: [{ type: "text", text: limitText(JSON.stringify(
 var fail = (err) => ({ isError: true, content: [{ type: "text", text: String(err.message || err) }] });
 var READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 var packageName = external_exports.string().optional().describe("Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.");
-var server = new McpServer({ name: "hypercaffium-play", version: "0.12.1" });
+var server = new McpServer({ name: "hypercaffium-play", version: "0.12.2" });
 function readTool(name, description, inputSchema, handler) {
   server.registerTool(name, { description, inputSchema, annotations: READ_ONLY }, async (args) => {
     const started = Date.now();
@@ -38614,13 +38619,13 @@ featureTool(
 featureTool(
   "uploads",
   "play_upload_bundle",
-  "Prepare uploading an Android App Bundle (.aab) from this computer, optionally with its R8/ProGuard mapping.txt so crash reports are readable, and putting it on a track (default internal). Production uploads are always a DRAFT release. Upload, mapping and track change are committed together in one Play edit, or not at all. Tier 2. Skip this if EAS or Gradle uploads your builds.",
+  "Prepare uploading an Android App Bundle (.aab) from this computer, optionally with its R8/ProGuard mapping.txt so crash reports are readable, and putting it on a track (default internal). Only internal, alpha and beta can go live straight from an upload; any other track (production included) gets a DRAFT release. Upload, mapping and track change are committed together in one Play edit, or not at all. Tier 2. Skip this if EAS or Gradle uploads your builds.",
   {
     packageName,
     file: external_exports.string().describe("Full path to the .aab file"),
     mappingFile: external_exports.string().optional().describe("Full path to mapping.txt from the same build (optional)"),
     track: external_exports.string().default("internal").describe("internal, alpha, beta, production, or a closed track"),
-    status: external_exports.enum(["draft", "completed", "inProgress"]).optional().describe("Testing tracks default to completed; production is always draft"),
+    status: external_exports.enum(["draft", "completed", "inProgress"]).optional().describe("internal/alpha/beta default to completed; every other track is always draft"),
     userFraction: external_exports.number().optional().describe("For inProgress: rollout fraction, e.g. 0.1"),
     releaseNotes: notesSchema.optional()
   },

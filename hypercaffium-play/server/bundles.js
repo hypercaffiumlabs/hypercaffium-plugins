@@ -2,8 +2,10 @@
 // file, and putting it on a track: all inside ONE Play edit, committed together or discarded.
 // "uploads" feature (plus "releases", since it places a release on a track). Tier 2.
 //
-// Safety choices: production uploads are always DRAFT releases (go live later with play_set_release
-// or play_rollout, after looking at it); the file is re-checked byte for byte before upload; and if
+// Safety choices: a new build may go live directly ONLY on the internal, alpha or beta testing
+// tracks (an allowlist, checked against both the name given and the name Google reports). Everywhere
+// else, production included, the upload is a DRAFT release (go live later with play_set_release or
+// play_rollout, after looking at it). The file is re-checked byte for byte before upload, and if
 // anything fails, the edit is discarded, so nothing at all reaches Google Play.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -32,6 +34,10 @@ function inspect(p, { ext, max, zip }) {
   return { path: p, name: path.basename(p), size: st.size, sha256: crypto.createHash('sha256').update(buf).digest('hex') };
 }
 
+// Tracks where an upload may become a live (completed or staged) release straight away.
+const DIRECT_RELEASE_TRACKS = new Set(['internal', 'alpha', 'beta']);
+const directOk = (...names) => names.every((n) => DIRECT_RELEASE_TRACKS.has(String(n ?? '').toLowerCase()));
+
 // What the track will hold after the upload: the new release, plus the completed release that keeps
 // serving everyone else while the new one is a draft or staged. Everything else is replaced.
 function planTrack(releases, status) {
@@ -56,11 +62,15 @@ export async function prepareUploadBundle(deps, { packageName, file, mappingFile
   const blocked = off(['uploads', 'releases']);
   if (blocked) return blocked;
   const pkg = packageName || deps.defaultPackage();
-  // Track names are compared case-insensitively, so "Production" cannot slip past the draft rule.
-  const isProd = String(track).toLowerCase() === 'production';
-  const finalStatus = isProd ? 'draft' : status || 'completed';
-  if (isProd && status && status !== 'draft') {
-    throw new Error('Uploads to production are always a DRAFT release. Look at it, then make it live with play_set_release or play_rollout.');
+  // Read the track first, so the decision uses the name Google itself reports for it.
+  const current = await readTrack(deps, pkg, track);
+  const direct = directOk(track, current.track);
+  const finalStatus = direct ? status || 'completed' : 'draft';
+  if (!direct && status && status !== 'draft') {
+    throw new Error(
+      `Only the internal, alpha and beta tracks can receive a live release straight from an upload; on "${track}" it is always a DRAFT. ` +
+        'Look at it, then make it live with play_set_release or play_rollout.',
+    );
   }
   if (!['draft', 'completed', 'inProgress'].includes(finalStatus)) throw new Error('status must be draft, completed or inProgress.');
   if (finalStatus === 'inProgress' && !(userFraction > 0 && userFraction < 1)) throw new Error('A staged rollout needs userFraction between 0 and 1 (0.1 = 10%).');
@@ -68,7 +78,6 @@ export async function prepareUploadBundle(deps, { packageName, file, mappingFile
   const bundle = inspect(file, { ext: '.aab', max: MAX_BUNDLE, zip: true });
   const mapping = mappingFile ? inspect(mappingFile, { ext: '.txt', max: MAX_MAPPING }) : null;
 
-  const current = await readTrack(deps, pkg, track);
   const { keep, replaced } = planTrack(current.releases, finalStatus);
   // Never silently end a staged rollout (or a halted one) by uploading over it.
   const live = replaced.filter((r) => r.status === 'inProgress' || r.status === 'halted');
@@ -88,7 +97,7 @@ export async function prepareUploadBundle(deps, { packageName, file, mappingFile
     allowed: true,
     kind: 'bundle',
     tier: 2,
-    tierReason: isProd ? 'uploads a new version as a production DRAFT (nobody gets it until you release it)' : `uploads a new version that ${track} testers can install`,
+    tierReason: direct ? `uploads a new version that ${track} testers can install` : `uploads a new version as a DRAFT on ${track} (nobody gets it until you release it)`,
     feature: 'uploads, releases',
     ticket: ticket.id,
     expires: toLocalTime(new Date(ticket.expiresAt).toISOString()),
@@ -108,7 +117,7 @@ export async function runBundle(payload, deps) {
   const missing = ['uploads', 'releases'].filter((k) => !currentFeatures()[k]);
   if (missing.length) throw new Error(`The "${missing.join('", "')}" feature was switched off since the preview, so this upload is refused.`);
   const { pkg, track, status, userFraction, notes, bundle, mapping } = payload;
-  if (String(track).toLowerCase() === 'production' && status !== 'draft') throw new Error('Production uploads must be a draft release.');
+  if (status !== 'draft' && !directOk(track)) throw new Error(`Uploads to "${track}" must be a draft release.`);
   const steps = [];
   let edit;
   try {
@@ -135,6 +144,8 @@ export async function runBundle(payload, deps) {
     // Put it on the track exactly as previewed: if the track changed since the preview (someone
     // released or rolled out in the meantime), stop instead of replacing what the owner never saw.
     const cur = await deps.get(`${APP}/${pkg}/edits/${edit.id}/tracks/${track}`, {});
+    // Google's own name for the track must still allow a direct release.
+    if (status !== 'draft' && !directOk(track, cur.track)) throw new Error(`Google reports the track as "${cur.track}"; uploads there must be a draft. Nothing was committed.`);
     if (payload.trackFingerprint !== undefined && fingerprint(cur.releases) !== payload.trackFingerprint) {
       throw new Error(`The ${track} track changed since the preview. Nothing was committed; prepare the upload again.`);
     }

@@ -144,7 +144,7 @@ const packageName = z
   .optional()
   .describe('Android package name, e.g. com.example.app. Defaults to defaultPackageName from the config file.');
 
-const server = new McpServer({ name: 'hypercaffium-play', version: '0.12.1' });
+const server = new McpServer({ name: 'hypercaffium-play', version: '0.12.2' });
 
 // Every tool goes through here so every call is audited, success or failure.
 function readTool(name, description, inputSchema, handler) {
@@ -536,13 +536,13 @@ featureTool('releases',
 featureTool(
   'uploads',
   'play_upload_bundle',
-  'Prepare uploading an Android App Bundle (.aab) from this computer, optionally with its R8/ProGuard mapping.txt so crash reports are readable, and putting it on a track (default internal). Production uploads are always a DRAFT release. Upload, mapping and track change are committed together in one Play edit, or not at all. Tier 2. Skip this if EAS or Gradle uploads your builds.',
+  'Prepare uploading an Android App Bundle (.aab) from this computer, optionally with its R8/ProGuard mapping.txt so crash reports are readable, and putting it on a track (default internal). Only internal, alpha and beta can go live straight from an upload; any other track (production included) gets a DRAFT release. Upload, mapping and track change are committed together in one Play edit, or not at all. Tier 2. Skip this if EAS or Gradle uploads your builds.',
   {
     packageName,
     file: z.string().describe('Full path to the .aab file'),
     mappingFile: z.string().optional().describe('Full path to mapping.txt from the same build (optional)'),
     track: z.string().default('internal').describe('internal, alpha, beta, production, or a closed track'),
-    status: z.enum(['draft', 'completed', 'inProgress']).optional().describe('Testing tracks default to completed; production is always draft'),
+    status: z.enum(['draft', 'completed', 'inProgress']).optional().describe('internal/alpha/beta default to completed; every other track is always draft'),
     userFraction: z.number().optional().describe('For inProgress: rollout fraction, e.g. 0.1'),
     releaseNotes: notesSchema.optional(),
   },
