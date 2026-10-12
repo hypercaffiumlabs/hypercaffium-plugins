@@ -16,7 +16,7 @@ Looking for background notifications? Each store plugin has its own optional wat
 ## Install
 
 ```
-/plugin marketplace add hypercaffiumlabs/marketplace
+/plugin marketplace add hypercaffiumlabs/hypercaffium-plugins
 /plugin install hypercaffium-apple@hypercaffium
 /plugin install hypercaffium-play@hypercaffium
 /plugin install glue@hypercaffium

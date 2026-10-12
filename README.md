@@ -13,7 +13,7 @@
 The first command adds the Hypercaffium catalog; then install only the plugins you need.
 
 ```
-/plugin marketplace add hypercaffiumlabs/marketplace
+/plugin marketplace add hypercaffiumlabs/hypercaffium-plugins
 /plugin install hypercaffium-apple@hypercaffium
 /plugin install hypercaffium-play@hypercaffium
 /plugin install glue@hypercaffium

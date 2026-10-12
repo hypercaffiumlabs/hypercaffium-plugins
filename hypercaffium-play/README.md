@@ -43,7 +43,7 @@ See [COVERAGE.md](COVERAGE.md) for what the API does and does not cover (for exa
 Requires [Claude Code](https://claude.com/claude-code) and Node.js 20 or newer.
 
 ```
-/plugin marketplace add hypercaffiumlabs/marketplace
+/plugin marketplace add hypercaffiumlabs/hypercaffium-plugins
 /plugin install hypercaffium-play@hypercaffium
 ```
 
@@ -52,7 +52,7 @@ Requires [Claude Code](https://claude.com/claude-code) and Node.js 20 or newer.
 If you publish on both stores, the first command adds the Hypercaffium catalog and the other three install one plugin each:
 
 ```
-/plugin marketplace add hypercaffiumlabs/marketplace
+/plugin marketplace add hypercaffiumlabs/hypercaffium-plugins
 /plugin install hypercaffium-apple@hypercaffium
 /plugin install hypercaffium-play@hypercaffium
 /plugin install glue@hypercaffium
