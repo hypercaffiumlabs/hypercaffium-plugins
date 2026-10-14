@@ -19,7 +19,7 @@ The first command adds the Hypercaffium catalog; then install the plugin for eac
 
 Then run **`/hypercaffium-apple:setup`** and/or **`/hypercaffium-play:setup`**. Each connects your account and lets you choose what the plugin may change, grouped by risk level. Critical areas (users, signing keys, refunds) start off and can only be switched on from a terminal menu.
 
-## Safety model, in one paragraph
+## Safety model
 
 Writes are off until you switch them on, and you choose which areas may be changed at all. A change is always two steps (prepare, then apply the exact ticket), is checked against the store's own schema, is classified into tiers by the server, and is written to an audit log with before and after values. Deletes, user management and signing assets are blocked.
 
