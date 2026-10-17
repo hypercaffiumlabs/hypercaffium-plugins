@@ -4,14 +4,14 @@ import { classify, TicketStore, prepareChange, applyChange, recordConsoleResult,
 
 const P = 'my-project-123';
 const ALL_ON = {
-  apis: true, testUsers: true, branding: true, scopes: true, clients: true, signIns: true,
+  apis: true, projects: true, testUsers: true, branding: true, scopes: true, clients: true, signIns: true,
   publishing: true, liveProjects: true, destructive: true,
 };
 const RECIPE = { name: 'r1', clientType: 'desktop', clientFile: '{home}/tool/client.json' };
 
 function makeDeps(over = {}) {
   const clock = { t: 1_000_000 };
-  const calls = { enable: [], signIn: [], install: [] };
+  const calls = { enable: [], create: [], signIn: [], install: [] };
   const deps = {
     config: { writesEnabled: true, liveProjects: [], features: { ...ALL_ON }, ...over.config },
     gcloud: {
@@ -19,6 +19,15 @@ function makeDeps(over = {}) {
       enableService: async (project, api) => {
         calls.enable.push([project, api]);
         if (over.enableFails) throw new Error('gcloud exploded');
+      },
+      listProjects: async () => over.projects || [],
+      createProject: async (args) => {
+        calls.create.push(args);
+        if (over.createFails) throw new Error('That project id is already taken.');
+      },
+      describeProject: async (id) => {
+        if (over.describeFails) throw new Error('not visible yet');
+        return { projectId: id, name: 'x', state: 'ACTIVE', parent: null };
       },
     },
     signIn: {
@@ -351,4 +360,60 @@ test('unknown params are dropped from the stored ticket', async () => {
   const c = await engine.prepareChange({ projectId: P, action: 'publish', params: { currentObserved: { a: 1 }, sneaky: 1 } });
   assert.deepEqual(engine.store.tickets.get(c.ticket).payload.params, {});
   assert.match(c.preview.before, /"a":1/);
+});
+
+// ---- create_project ----
+
+const NEW = 'brand-new-tool-1';
+
+test('create_project: preview names the place and the no-billing note', async () => {
+  const { engine } = makeDeps();
+  const r = await engine.prepareChange({ projectId: NEW, action: 'create_project', params: { name: 'my-tool', organization: '123456789012' } });
+  assert.equal(r.mode, 'gcloud');
+  assert.equal(r.feature, 'projects');
+  assert.match(r.preview.before, /no project with the id brand-new-tool-1/);
+  assert.match(r.preview.after, /"my-tool" with the id brand-new-tool-1 exists, inside the organization 123456789012/);
+  assert.match(r.preview.note, /No billing account is linked/);
+  const bare = await engine.prepareChange({ projectId: NEW, action: 'create_project' });
+  assert.match(bare.preview.after, /stands alone/);
+});
+
+test('create_project: refuses an id you already have, bad names and bad parents', async () => {
+  const mine = makeDeps({ projects: [{ projectId: NEW, name: 'x' }] });
+  await assert.rejects(mine.engine.prepareChange({ projectId: NEW, action: 'create_project' }), /already have a project/);
+  const { engine } = makeDeps();
+  await assert.rejects(engine.prepareChange({ projectId: NEW, action: 'create_project', params: { name: 'has space' } }), /no spaces/);
+  await assert.rejects(engine.prepareChange({ projectId: NEW, action: 'create_project', params: { organization: '1', folder: '2' } }), /not both/);
+  await assert.rejects(engine.prepareChange({ projectId: NEW, action: 'create_project', params: { folder: 'abc' } }), /numeric id/);
+});
+
+test('create_project: switched off is blocked with no ticket', async () => {
+  const { engine } = makeDeps({ config: { features: { ...ALL_ON, projects: false } } });
+  const r = await engine.prepareChange({ projectId: NEW, action: 'create_project' });
+  assert.equal(r.blocked, true);
+  assert.equal(r.ticket, undefined);
+});
+
+test('create_project: apply creates once and reads the project back', async () => {
+  const { engine, calls } = makeDeps();
+  const r = await engine.prepareChange({ projectId: NEW, action: 'create_project', params: { name: 'my-tool', folder: '42' } });
+  const out = await engine.applyChange({ ticketId: r.ticket });
+  assert.deepEqual(calls.create, [{ projectId: NEW, name: 'my-tool', organization: undefined, folder: '42' }]);
+  assert.equal(out.verified, true);
+  assert.equal(out.project.state, 'ACTIVE');
+  await assert.rejects(engine.applyChange({ ticketId: r.ticket }), /already applied/);
+  assert.equal(calls.create.length, 1);
+});
+
+test('create_project: a failed create uses the ticket; a failed read-back says so', async () => {
+  const bad = makeDeps({ createFails: true });
+  const r = await bad.engine.prepareChange({ projectId: NEW, action: 'create_project' });
+  await assert.rejects(bad.engine.applyChange({ ticketId: r.ticket }), /already taken/);
+  await assert.rejects(bad.engine.applyChange({ ticketId: r.ticket }), /already applied/);
+  const blind = makeDeps({ describeFails: true });
+  const r2 = await blind.engine.prepareChange({ projectId: NEW, action: 'create_project' });
+  const out = await blind.engine.applyChange({ ticketId: r2.ticket });
+  assert.equal(out.applied, true);
+  assert.equal(out.verified, false);
+  assert.match(out.verifyError, /reading it back failed/);
 });

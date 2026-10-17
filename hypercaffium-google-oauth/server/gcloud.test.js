@@ -7,6 +7,9 @@ import {
   listProjects,
   enabledServices,
   enableService,
+  createProject,
+  describeProject,
+  listOrganizations,
 } from './gcloud.js';
 
 const GCLOUD = 'C:\\fake\\gcloud.cmd';
@@ -165,4 +168,32 @@ test('resolveGcloud finds gcloud on PATH and returns null when nothing exists', 
 
   const none = resolveGcloud({ env: { PATH: '/usr/bin' }, platform: 'darwin', exists: () => false, settingsPath: null });
   assert.equal(none, null);
+});
+
+test('createProject builds the exact gcloud command and checks every value first', async () => {
+  const { exec, calls } = fakeExec({ code: 0, stdout: '', stderr: '' });
+  await createProject({ projectId: 'my-new-tool', name: 'My-Tool', organization: '123456789012' }, { exec, gcloudPath: GCLOUD });
+  assert.deepEqual(calls[0].args, ['projects', 'create', 'my-new-tool', '--name=My-Tool', '--organization=123456789012', '--format=json', '--quiet']);
+  await createProject({ projectId: 'my-new-tool' }, { exec, gcloudPath: GCLOUD });
+  assert.deepEqual(calls[1].args, ['projects', 'create', 'my-new-tool', '--format=json', '--quiet']);
+  await assert.rejects(createProject({ projectId: 'Bad_Id' }, { exec, gcloudPath: GCLOUD }), /not a valid Google Cloud project id/);
+  await assert.rejects(createProject({ projectId: 'my-new-tool', name: 'a b c d' }, { exec, gcloudPath: GCLOUD }), /no spaces/);
+  await assert.rejects(createProject({ projectId: 'my-new-tool', organization: '1', folder: '2' }, { exec, gcloudPath: GCLOUD }), /not both/);
+  await assert.rejects(createProject({ projectId: 'my-new-tool', folder: '1;x' }, { exec, gcloudPath: GCLOUD }), /not a valid organization or folder id/);
+  assert.equal(calls.length, 2);
+});
+
+test('a taken project id gets a plain message', async () => {
+  const stderr = 'ERROR: (gcloud.projects.create) Project creation failed. The project ID you specified is already in use by another project.';
+  const { exec } = fakeExec({ code: 1, stdout: '', stderr });
+  await assert.rejects(createProject({ projectId: 'my-new-tool' }, { exec, gcloudPath: GCLOUD }), (err) => err.code === 'PROJECT_ID_TAKEN');
+});
+
+test('describeProject and listOrganizations map Google output', async () => {
+  const project = { projectId: 'my-new-tool', name: 'My-Tool', lifecycleState: 'ACTIVE', parent: { type: 'organization', id: '42' } };
+  const d = fakeExec({ code: 0, stdout: JSON.stringify(project), stderr: '' });
+  assert.deepEqual(await describeProject('my-new-tool', { exec: d.exec, gcloudPath: GCLOUD }),
+    { projectId: 'my-new-tool', name: 'My-Tool', state: 'ACTIVE', parent: 'organization 42' });
+  const o = fakeExec({ code: 0, stdout: JSON.stringify([{ name: 'organizations/42', displayName: 'example.com' }]), stderr: '' });
+  assert.deepEqual(await listOrganizations({ exec: o.exec, gcloudPath: GCLOUD }), [{ id: '42', name: 'example.com' }]);
 });

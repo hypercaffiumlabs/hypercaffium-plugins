@@ -90,3 +90,11 @@ test('compareObservation: clients listed as plain strings', () => {
   assert.equal(compareObservation({ clientAbsent: 'n' }, { clients: ['other'] }).match, true);
   assert.equal(compareObservation({ clientNamed: 'n' }, { clients: ['n'] }).match, true);
 });
+
+test('add_scopes plan uses the manual box and explains the verification box', () => {
+  const steps = consolePlan('add_scopes', P, { scopes: ['https://www.googleapis.com/auth/gmail.modify'] }).steps.join('\n');
+  assert.match(steps, /"Manually add scopes"/);
+  assert.match(steps, /"Add to table"/);
+  assert.match(steps, /"Continue": it only closes the message/);
+  assert.ok(!steps.includes(String.fromCharCode(0x2014)));
+});

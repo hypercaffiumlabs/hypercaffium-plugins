@@ -7,6 +7,11 @@ import { loadConfig } from './config.js';
 
 // Google Cloud project ids: 6 to 30 characters, lowercase letters, digits and hyphens.
 export const PROJECT_ID = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/;
+// Display names for a new project. Google allows more, but spaces cannot safely reach gcloud
+// through the Windows shell, so names here are letters, digits and hyphens only (renamable later).
+export const PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{2,28}[A-Za-z0-9]$/;
+// Organization and folder ids are plain numbers.
+export const PARENT_ID = /^[0-9]{1,25}$/;
 // API names such as gmail.googleapis.com.
 export const API_NAME = /^[a-z0-9-]+(\.[a-z0-9-]+)*\.googleapis\.com$/;
 // Only these characters may reach gcloud, so nothing can be smuggled into a shell command.
@@ -71,6 +76,10 @@ function explainFailure(stderr) {
   if (/You do not currently have an active account/i.test(stderr)) {
     return plainError('NO_ACCOUNT',
       'No Google account is signed in to gcloud. Run "gcloud auth login" in a terminal, then try again.');
+  }
+  if (/already (in use|exists)|ALREADY_EXISTS/i.test(stderr)) {
+    return plainError('PROJECT_ID_TAKEN',
+      'That project id is already taken. Project ids are unique across all of Google Cloud, so pick another one.');
   }
   if (/PERMISSION_DENIED/i.test(stderr)) {
     return plainError('PERMISSION_DENIED',
@@ -157,4 +166,48 @@ export async function enableService(projectId, api, deps = {}) {
   checkProjectId(projectId);
   checkApiName(api);
   await runGcloud(['services', 'enable', api, `--project=${projectId}`], deps);
+}
+
+// Organizations the signed-in account can see, for choosing where a new project lives.
+export async function listOrganizations(deps = {}) {
+  const value = await runGcloud(['organizations', 'list'], deps);
+  if (!Array.isArray(value)) return [];
+  return value.map((o) => ({ id: String(o.name || '').replace(/^organizations\//, ''), name: o.displayName }));
+}
+
+function checkParent({ organization, folder } = {}) {
+  if (organization !== undefined && folder !== undefined) {
+    throw plainError('BAD_PARENT', 'Choose an organization or a folder for the new project, not both.');
+  }
+  for (const v of [organization, folder]) {
+    if (v !== undefined && (typeof v !== 'string' || !PARENT_ID.test(v))) {
+      throw plainError('BAD_PARENT', `"${String(v)}" is not a valid organization or folder id (it is a number, such as 123456789012).`);
+    }
+  }
+}
+
+// Creates a new, empty project. No billing account is linked, so it costs nothing.
+export async function createProject({ projectId, name, organization, folder } = {}, deps = {}) {
+  checkProjectId(projectId);
+  if (name !== undefined && (typeof name !== 'string' || !PROJECT_NAME.test(name))) {
+    throw plainError('BAD_PROJECT_NAME', 'The project name must be 4 to 30 letters, digits or hyphens, with no spaces.');
+  }
+  checkParent({ organization, folder });
+  const args = ['projects', 'create', projectId];
+  if (name) args.push(`--name=${name}`);
+  if (organization) args.push(`--organization=${organization}`);
+  if (folder) args.push(`--folder=${folder}`);
+  await runGcloud(args, deps);
+}
+
+// One project as Google reports it, used to confirm a project really exists after creating it.
+export async function describeProject(projectId, deps = {}) {
+  checkProjectId(projectId);
+  const p = await runGcloud(['projects', 'describe', projectId], deps);
+  return {
+    projectId: p?.projectId,
+    name: p?.name,
+    state: p?.lifecycleState,
+    parent: p?.parent ? `${p.parent.type} ${p.parent.id}` : null,
+  };
 }

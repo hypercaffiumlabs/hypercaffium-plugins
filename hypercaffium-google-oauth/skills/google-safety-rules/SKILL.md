@@ -1,7 +1,7 @@
 ---
 name: google-safety-rules
 description: Use when working with Google sign-in setup, Google Cloud projects, enabling Google APIs, the Google Auth Platform (branding, scopes, audience, publishing, OAuth clients), signing in Google accounts for a tool, or checking whether a Google sign-in is healthy. Explains the google_ tools and the mandatory prepare-then-apply protocol, including the Kapture rules for console steps.
-version: 0.1.0
+version: 0.2.0
 ---
 
 # Google sign-in setup: how to use these tools safely
@@ -24,8 +24,8 @@ Explain what you are about to do in plain English before any change, and wait fo
 ## Changing things: ALWAYS two steps (three for console changes)
 
 1. **`google_prepare_change`** with `action` and `params`. It changes nothing. It returns the exact change, the current value next to the new value, a tier, and a one-time **ticket** (valid 10 minutes).
-   Params per action: `enable_api` {api}; `add_scopes` and `remove_scopes` {scopes}; `set_branding` {fields: {appName, supportEmail, homepage, privacyPolicy, termsOfService, developerEmail}}; `create_client` {recipe, name, clientType?, allowOverwrite?}; `sign_in_account` {recipe, email, accountType?, note?}; `add_test_user` {email}; `set_user_type` {userType}; `delete_client` {name}; `save_recipe` {recipe}. For console actions also pass `currentObserved`: what you just read on the page, using the keys in `consolePlan.expected`, so the preview and the live-project warning show the real "before". If the tool already has a client file, `create_client` is refused unless you prepare again with `allowOverwrite: true` (a critical change).
-   Actions: `enable_api`, `add_test_user`, `set_branding`, `add_scopes`, `create_client`, `sign_in_account`, `publish`, `set_user_type`, `remove_scopes`, `delete_client`, `back_to_testing`, `save_recipe`. `projectId` is optional only for `save_recipe` (saving your own recipe is a ticketed change too).
+   Params per action: `enable_api` {api}; `create_project` {name?, organization? or folder?} with `projectId` set to the NEW id; `add_scopes` and `remove_scopes` {scopes}; `set_branding` {fields: {appName, supportEmail, homepage, privacyPolicy, termsOfService, developerEmail}}; `create_client` {recipe, name, clientType?, allowOverwrite?}; `sign_in_account` {recipe, email, accountType?, note?}; `add_test_user` {email}; `set_user_type` {userType}; `delete_client` {name}; `save_recipe` {recipe}. For console actions also pass `currentObserved`: what you just read on the page, using the keys in `consolePlan.expected`, so the preview and the live-project warning show the real "before". If the tool already has a client file, `create_client` is refused unless you prepare again with `allowOverwrite: true` (a critical change).
+   Actions: `enable_api`, `create_project`, `add_test_user`, `set_branding`, `add_scopes`, `create_client`, `sign_in_account`, `publish`, `set_user_type`, `remove_scopes`, `delete_client`, `back_to_testing`, `save_recipe`. `projectId` is optional only for `save_recipe` (saving your own recipe is a ticketed change too).
 2. Explain the preview in plain English and wait for an explicit yes.
 3. **`google_apply_change`** with the ticket. `enable_api`, `sign_in_account` and `save_recipe` run right away. Console actions return a **console plan**: you then perform it with Kapture and finish with step 4.
 4. **`google_record_console_result`** with the ticket and what the page now shows, using the keys in `consolePlan.expected` (for example `publishingStatus`, `scopes[]`, `clients[{name, type}]`, `testUsers`, `userType`, `verificationStatus`; branding records need the branding keys). For `create_client`, also pass `downloadedFile` (the client JSON in the owner's Downloads folder); the plugin installs it only when the observation matches. The result says match or mismatch. Report a mismatch as a failure, never smooth it over.

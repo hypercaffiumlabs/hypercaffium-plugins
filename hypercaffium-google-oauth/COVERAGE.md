@@ -1,6 +1,6 @@
 # Google sign-in setup coverage
 
-What this plugin handles, and how. Checked 2026-10-16.
+What this plugin handles, and how. Checked 2026-10-17.
 
 Google offers **no public API** for the Google Auth Platform screens a standard app uses. The old IAP OAuth Admin APIs (`gcloud iap oauth-brands`, `gcloud iap oauth-clients`) were shut down on 2026-03-19, and `gcloud iam oauth-clients` is for Workforce Identity Federation only. Those steps therefore run in the browser through Kapture.
 
@@ -9,6 +9,8 @@ Google offers **no public API** for the Google Auth Platform screens a standard 
 | Area | Action | How | Approval |
 |---|---|---|---|
 | List projects | `google_list_projects` | gcloud | None (read) |
+| List organizations | `google_list_organizations` | gcloud | None (read) |
+| Create a project (empty, no billing) | `create_project` | gcloud, then read back from Google | Preview + yes |
 | Enabled APIs | `google_project_status` | gcloud | None (read) |
 | Enable an API | `enable_api` | gcloud | Preview + yes |
 | Branding (app name, support email, links, developer contact) | `set_branding` | Console, Kapture | Preview + yes |
@@ -34,8 +36,9 @@ Google offers **no public API** for the Google Auth Platform screens a standard 
 | Service accounts, Workload and Workforce Identity, IAM roles | Out of scope |
 | Google Workspace admin settings | Out of scope |
 | Running the tools themselves | The plugin only sets up their Google side |
-| Creating a new Google Cloud project | v1 lists existing projects only; create the project in the Google Cloud console first |
-| Changing the downloads folder | The `downloadsDir` setting is not configurable in v1; client files are read from the Downloads folder only |
+| Linking billing to a project | Spends money, so the owner does it in the Google Cloud console |
+| Deleting a project | Out of scope; delete it in the Google Cloud console |
+| Changing the downloads folder | The `downloadsDir` setting is not configurable yet; client files are read from the Downloads folder only |
 | Reading a client secret | Never. Google shows it once; the owner downloads the file and the plugin moves it unread |
 
 ## Console labels

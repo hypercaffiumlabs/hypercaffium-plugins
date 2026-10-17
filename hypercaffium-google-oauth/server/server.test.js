@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const EXPECTED_TOOLS = [
-  'google_check_setup', 'google_settings', 'google_save_settings', 'google_list_projects', 'google_project_status',
+  'google_check_setup', 'google_settings', 'google_save_settings', 'google_list_projects', 'google_list_organizations', 'google_project_status',
   'google_list_recipes', 'google_console_page', 'google_check_accounts', 'google_evaluate_console',
   'google_audit_log', 'google_prepare_change', 'google_apply_change', 'google_apply_sensitive_change',
   'google_record_console_result',
@@ -64,7 +64,7 @@ export function startServer(entry = fileURLToPath(new URL('./index.js', import.m
   };
 }
 
-test('server: lists all 14 tools and read tools are marked read-only', async () => {
+test('server: lists all 15 tools and read tools are marked read-only', async () => {
   const s = startServer();
   try {
     await s.init();
@@ -142,11 +142,11 @@ test('server: built-in recipe is found', async () => {
 
 // The shipped bundle (built by npm run build) must behave the same; skipped when not built yet.
 const BUNDLE = fileURLToPath(new URL('./dist/server.mjs', import.meta.url));
-test('bundle: dist/server.mjs lists 14 tools and finds the built-in recipe', { skip: !fs.existsSync(BUNDLE) }, async () => {
+test('bundle: dist/server.mjs lists 15 tools and finds the built-in recipe', { skip: !fs.existsSync(BUNDLE) }, async () => {
   const s = startServer(BUNDLE);
   try {
     await s.init();
-    assert.equal((await s.tools()).length, 14);
+    assert.equal((await s.tools()).length, 15);
     assert.match((await s.call('google_list_recipes')).text, /mcp-google-workspace/);
   } finally {
     s.close();

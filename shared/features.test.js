@@ -89,7 +89,7 @@ test('the terminal menu refuses to run without an interactive terminal', () => {
   assert.match(r.stderr, /needs an interactive terminal/);
 });
 
-const GOOGLE_KEYS = ['apis', 'branding', 'clients', 'destructive', 'liveProjects', 'publishing', 'scopes', 'signIns', 'testUsers'];
+const GOOGLE_KEYS = ['apis', 'branding', 'clients', 'destructive', 'liveProjects', 'projects', 'publishing', 'scopes', 'signIns', 'testUsers'];
 
 test('google gets only its own features', () => {
   assert.deepEqual(Object.keys(resolveFeatures({}, 'google')).sort(), GOOGLE_KEYS);

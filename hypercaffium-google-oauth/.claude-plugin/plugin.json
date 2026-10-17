@@ -1,6 +1,6 @@
 {
   "name": "hypercaffium-google-oauth",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Set up and check Google sign-in for any tool from Claude: Google Cloud project and APIs, Google Auth Platform branding, scopes, clients and publishing, account sign-ins and a health check. Every change is previewed, confirmed and audited.",
   "author": {
     "name": "Hypercaffium Labs"

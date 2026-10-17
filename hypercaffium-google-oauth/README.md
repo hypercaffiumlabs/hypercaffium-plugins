@@ -6,13 +6,13 @@ Such tools need a Google Cloud "sign-in app": a project with the right APIs on, 
 
 Every change is **previewed, confirmed and logged**.
 
-> Status: pre-release (0.1.0). Not affiliated with or endorsed by Google. "Google" and "Google Cloud" are Google trademarks.
+> Status: pre-release (0.2.0). Not affiliated with or endorsed by Google. "Google" and "Google Cloud" are Google trademarks.
 
 ## What it can do
 
 | Area | How |
 |---|---|
-| **Projects and APIs** | List projects, enable the APIs a tool needs. Uses your existing `gcloud` sign-in, no browser |
+| **Projects and APIs** | List projects and organizations, create a new empty project (no billing linked), enable the APIs a tool needs. Uses your existing `gcloud` sign-in, no browser |
 | **Sign-in app** | Branding, scopes, test users, audience, OAuth client, publish to production. Done in the Google Cloud console with the Kapture browser extension, one previewed step at a time |
 | **Hand-off to the tool** | Installs the downloaded client file where the tool expects it, then signs in each Google account with the tool's own login command |
 | **Health check** | Publishing status, scopes needed vs configured, clients present, and for each saved login the scopes it really has and whether it still works. Plain-English verdict per item |
@@ -32,7 +32,7 @@ See [COVERAGE.md](COVERAGE.md) for what is automated and how.
 
 ## The one limit
 
-Google offers **no public API** for the Google Auth Platform screens a standard app uses: branding, publishing to production, Data Access scopes, or creating standard OAuth clients. (The old IAP OAuth Admin APIs were shut down in March 2026.) That is why these steps go through the browser. Enabling APIs and listing projects do not need it.
+Google offers **no public API** for the Google Auth Platform screens a standard app uses: branding, publishing to production, Data Access scopes, or creating standard OAuth clients. (The old IAP OAuth Admin APIs were shut down in March 2026.) That is why these steps go through the browser. Creating projects, enabling APIs and listing projects do not need it.
 
 ## How changes stay safe
 

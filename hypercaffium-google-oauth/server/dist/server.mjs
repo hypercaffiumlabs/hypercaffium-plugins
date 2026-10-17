@@ -36746,6 +36746,13 @@ var FEATURES = [
     help: "Enabling a Google API on a project that is not live."
   },
   {
+    key: "projects",
+    risk: "medium",
+    label: "New projects",
+    stores: ["google"],
+    help: "Creating a new, empty Google Cloud project. No billing is linked, so it costs nothing."
+  },
+  {
     key: "testUsers",
     risk: "low",
     label: "Test users",
@@ -36904,6 +36911,9 @@ var LABELS = {
   save: "Save",
   confirm: "Confirm",
   addOrRemoveScopes: "Add or remove scopes",
+  manuallyAddScopes: "Manually add scopes",
+  addToTable: "Add to table",
+  continue: "Continue",
   update: "Update",
   createClient: "Create client",
   applicationType: "Application type",
@@ -36933,6 +36943,7 @@ function labelsFor(page) {
 }
 var ACTIONS = {
   enable_api: { mode: "gcloud", feature: "apis" },
+  create_project: { mode: "gcloud", feature: "projects" },
   add_test_user: { mode: "console", page: "audience", feature: "testUsers" },
   set_branding: { mode: "console", page: "branding", feature: "branding" },
   add_scopes: { mode: "console", page: "scopes", feature: "scopes" },
@@ -37005,7 +37016,14 @@ function consolePlan(action, projectId2, params = {}) {
     }
     case "add_scopes":
       need(isList(params.scopes), "scopes must be a non-empty list");
-      actions = [`Click ${q(L.addOrRemoveScopes)}.`, ...params.scopes.map((s) => `Tick the scope ${s} (use the filter box to find it).`), `Click ${q(L.update)}, then ${q(L.save)}.`];
+      actions = [
+        `Click ${q(L.addOrRemoveScopes)}.`,
+        `Tick any of these scopes already listed in the panel: ${params.scopes.join(", ")}.`,
+        `Type the full address of each one not listed (https://www.googleapis.com/auth/...) into the ${q(L.manuallyAddScopes)} box, separated by commas, and click ${q(L.addToTable)}.`,
+        "Check that exactly the wanted scopes are ticked, and no others were added.",
+        `Click ${q(L.update)}. If a box says verification is required, click ${q(L.continue)}: it only closes the message and submits nothing.`,
+        `Click ${q(L.save)} and wait for Google to say the changes were saved.`
+      ];
       expected = { scopesInclude: params.scopes };
       break;
     case "remove_scopes":
@@ -37102,6 +37120,8 @@ import fs4 from "node:fs";
 import path4 from "node:path";
 import { spawn } from "node:child_process";
 var PROJECT_ID2 = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/;
+var PROJECT_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{2,28}[A-Za-z0-9]$/;
+var PARENT_ID = /^[0-9]{1,25}$/;
 var API_NAME = /^[a-z0-9-]+(\.[a-z0-9-]+)*\.googleapis\.com$/;
 var SAFE_ARG = /^[A-Za-z0-9@._:=\/-]+$/;
 var INSTALL_URL = "https://cloud.google.com/sdk/docs/install";
@@ -37163,6 +37183,12 @@ function explainFailure(stderr) {
     return plainError(
       "NO_ACCOUNT",
       'No Google account is signed in to gcloud. Run "gcloud auth login" in a terminal, then try again.'
+    );
+  }
+  if (/already (in use|exists)|ALREADY_EXISTS/i.test(stderr)) {
+    return plainError(
+      "PROJECT_ID_TAKEN",
+      "That project id is already taken. Project ids are unique across all of Google Cloud, so pick another one."
     );
   }
   if (/PERMISSION_DENIED/i.test(stderr)) {
@@ -37238,6 +37264,43 @@ async function enableService(projectId2, api, deps = {}) {
   checkProjectId(projectId2);
   checkApiName(api);
   await runGcloud(["services", "enable", api, `--project=${projectId2}`], deps);
+}
+async function listOrganizations(deps = {}) {
+  const value = await runGcloud(["organizations", "list"], deps);
+  if (!Array.isArray(value)) return [];
+  return value.map((o) => ({ id: String(o.name || "").replace(/^organizations\//, ""), name: o.displayName }));
+}
+function checkParent({ organization, folder } = {}) {
+  if (organization !== void 0 && folder !== void 0) {
+    throw plainError("BAD_PARENT", "Choose an organization or a folder for the new project, not both.");
+  }
+  for (const v of [organization, folder]) {
+    if (v !== void 0 && (typeof v !== "string" || !PARENT_ID.test(v))) {
+      throw plainError("BAD_PARENT", `"${String(v)}" is not a valid organization or folder id (it is a number, such as 123456789012).`);
+    }
+  }
+}
+async function createProject({ projectId: projectId2, name, organization, folder } = {}, deps = {}) {
+  checkProjectId(projectId2);
+  if (name !== void 0 && (typeof name !== "string" || !PROJECT_NAME.test(name))) {
+    throw plainError("BAD_PROJECT_NAME", "The project name must be 4 to 30 letters, digits or hyphens, with no spaces.");
+  }
+  checkParent({ organization, folder });
+  const args = ["projects", "create", projectId2];
+  if (name) args.push(`--name=${name}`);
+  if (organization) args.push(`--organization=${organization}`);
+  if (folder) args.push(`--folder=${folder}`);
+  await runGcloud(args, deps);
+}
+async function describeProject(projectId2, deps = {}) {
+  checkProjectId(projectId2);
+  const p = await runGcloud(["projects", "describe", projectId2], deps);
+  return {
+    projectId: p?.projectId,
+    name: p?.name,
+    state: p?.lifecycleState,
+    parent: p?.parent ? `${p.parent.type} ${p.parent.id}` : null
+  };
 }
 
 // health.js
@@ -37819,6 +37882,7 @@ var checkEmail = (e) => {
 };
 var ALLOWED_PARAMS = {
   enable_api: ["api"],
+  create_project: ["name", "organization", "folder"],
   sign_in_account: ["recipe", "email", "accountType", "note"],
   save_recipe: ["recipe"],
   create_client: ["recipe", "name", "clientType", "allowOverwrite"],
@@ -37836,6 +37900,16 @@ function normalizeParams2(action, params, deps) {
   for (const k of ALLOWED_PARAMS[action] || []) if (params[k] !== void 0) p[k] = params[k];
   if (action === "enable_api") {
     if (typeof p.api !== "string" || !API_NAME.test(p.api)) throw new Error("api must be a service name such as gmail.googleapis.com.");
+  } else if (action === "create_project") {
+    if (p.name !== void 0 && (typeof p.name !== "string" || !PROJECT_NAME.test(p.name))) {
+      throw new Error("name must be 4 to 30 letters, digits or hyphens, with no spaces (it can be renamed in the console later).");
+    }
+    if (p.organization !== void 0 && p.folder !== void 0) throw new Error("Choose organization or folder for the new project, not both.");
+    for (const k of ["organization", "folder"]) {
+      if (p[k] !== void 0 && (typeof p[k] !== "string" || !PARENT_ID.test(p[k]))) {
+        throw new Error(`${k} must be a numeric id such as 123456789012 (google_list_organizations shows organization ids).`);
+      }
+    }
   } else if (action === "sign_in_account") {
     if (!p.recipe) throw new Error("recipe is required.");
     checkEmail(p.email);
@@ -37864,6 +37938,8 @@ function afterPicture(action, p) {
   switch (action) {
     case "enable_api":
       return `${p.api} is on`;
+    case "create_project":
+      return `a new project ${p.name ? `"${p.name}" ` : ""}with the id ${p.projectId} exists, ${placeOf(p)}`;
     case "save_recipe":
       return `the recipe "${p.recipe.name}" is saved in your recipes folder`;
     case "sign_in_account":
@@ -37889,6 +37965,11 @@ function afterPicture(action, p) {
     default:
       return "";
   }
+}
+function placeOf(p) {
+  if (p.organization) return `inside the organization ${p.organization}`;
+  if (p.folder) return `inside the folder ${p.folder}`;
+  return "with no organization or folder (it stands alone)";
 }
 function describeRecipe(recipe, home, email3) {
   const vars = email3 ? { home, email: email3 } : { home };
@@ -37916,6 +37997,7 @@ async function prepareChange({ projectId: projectId2, action, params = {} } = {}
     return { allowed: false, blocked: true, tier: 3, feature: verdict.feature, live, reason: verdict.reason };
   }
   const p = normalizeParams2(action, params, deps);
+  if (action === "create_project") p.projectId = projectId2;
   const plan = mode === "console" ? consolePlan(action, projectId2, p) : void 0;
   let before;
   let alreadyOn = false;
@@ -37923,6 +38005,12 @@ async function prepareChange({ projectId: projectId2, action, params = {} } = {}
     const enabled = await deps.gcloud.enabledServices(projectId2);
     alreadyOn = enabled.includes(p.api);
     before = alreadyOn ? `${p.api} is already on` : `${p.api} is off`;
+  } else if (action === "create_project") {
+    const mine = await deps.gcloud.listProjects();
+    if (mine.some((x) => x.projectId === projectId2)) {
+      throw new Error(`You already have a project with the id ${projectId2}, so there is nothing to create. Pick a new id.`);
+    }
+    before = `no project with the id ${projectId2} in your account`;
   } else if (mode === "console") {
     before = params.currentObserved !== void 0 ? show(params.currentObserved) : UNREAD;
   } else {
@@ -37943,6 +38031,9 @@ async function prepareChange({ projectId: projectId2, action, params = {} } = {}
   }
   const preview = { before, after };
   if (alreadyOn) preview.note = "It is already on, so applying changes nothing.";
+  if (action === "create_project") {
+    preview.note = "No billing account is linked, so the project costs nothing. Project ids are unique across all of Google Cloud and can never be changed or reused; if someone else already has this id, Google refuses and nothing is created.";
+  }
   let recipeSnapshot;
   if (action === "save_recipe") {
     recipeSnapshot = p.recipe;
@@ -38027,6 +38118,17 @@ async function applyChange({ ticketId, sensitiveTool = false } = {}, deps) {
     return { consolePlan: consolePlan(p.action, p.projectId, p.params), next: NEXT_CONSOLE };
   }
   deps.store.setState(ticketId, "failed");
+  if (p.action === "create_project") {
+    const { name, organization, folder } = p.params;
+    await deps.gcloud.createProject({ projectId: p.projectId, name, organization, folder });
+    deps.store.setState(ticketId, "recorded");
+    try {
+      const project = await deps.gcloud.describeProject(p.projectId);
+      return { applied: true, action: p.action, projectId: p.projectId, verified: project.projectId === p.projectId, project };
+    } catch (err) {
+      return { applied: true, action: p.action, projectId: p.projectId, verified: false, verifyError: `Created, but reading it back failed: ${err.message}` };
+    }
+  }
   if (p.mode === "gcloud") {
     await deps.gcloud.enableService(p.projectId, p.params.api);
     deps.store.setState(ticketId, "recorded");
@@ -38076,7 +38178,7 @@ async function recordConsoleResult({ ticketId, observed, downloadedFile } = {}, 
 }
 
 // index.js
-var VERSION = "0.1.0";
+var VERSION = "0.2.0";
 var SETTINGS_FILE = process.env.HYPERCAFFIUM_GOOGLE_OAUTH_CONFIG || CONFIG_PATH;
 var KAPTURE_NOTE = "Console steps need the Kapture browser extension connected; without it they come back as manual steps.";
 var MAX_OUTPUT_CHARS = 6e4;
@@ -38101,7 +38203,10 @@ function buildDeps(config2) {
     store: ticketStore,
     gcloud: {
       enabledServices: (projectId2) => enabledServices(projectId2, gcloudDeps),
-      enableService: (projectId2, api) => enableService(projectId2, api, gcloudDeps)
+      enableService: (projectId2, api) => enableService(projectId2, api, gcloudDeps),
+      listProjects: () => listProjects(gcloudDeps),
+      createProject: (args) => createProject(args, gcloudDeps),
+      describeProject: (projectId2) => describeProject(projectId2, gcloudDeps)
     },
     signIn: { signInAccount, installClientFile },
     recipes: { getRecipe, saveRecipe, isBuiltin: isBuiltinRecipe }
@@ -38215,6 +38320,12 @@ readTool(
   async () => listProjects({ gcloudPath: gcloudPathFor(loadConfig()) })
 );
 readTool(
+  "google_list_organizations",
+  "List the Google Cloud organizations the signed-in gcloud account can see (id and name), for choosing where a new project lives with create_project. An empty list is normal for personal accounts.",
+  {},
+  async () => listOrganizations({ gcloudPath: gcloudPathFor(loadConfig()) })
+);
+readTool(
   "google_project_status",
   "One project at a glance: which APIs are enabled, whether it is marked live in the settings, and the console page address for every Google Auth Platform page (read those with Kapture to see publishing status, clients, scopes and test users).",
   { projectId },
@@ -38265,7 +38376,7 @@ readTool(
   {
     projectId: projectId.optional().describe("Google Cloud project id. Not used for save_recipe."),
     action: external_exports.string().describe(`One of: ${Object.keys(ACTIONS).join(", ")}`),
-    params: external_exports.record(external_exports.string(), external_exports.any()).optional().describe('Action details, e.g. {"api":"gmail.googleapis.com"} for enable_api, {"email":"a@b.com"} for add_test_user, {"recipe":{...}} for save_recipe (saving a recipe also needs this two-step approval). Keys per action: enable_api {api}; add_scopes/remove_scopes {scopes}; set_branding {fields:{appName, supportEmail, homepage, privacyPolicy, termsOfService, developerEmail}}; create_client {recipe, name, clientType?, allowOverwrite?}; sign_in_account {recipe, email, accountType?, note?}; add_test_user {email}; set_user_type {userType}; delete_client {name}; save_recipe {recipe}. For console actions also pass currentObserved: what you just read on the page, with the same keys as consolePlan.expected, so the preview and any live-project warning show the real before.')
+    params: external_exports.record(external_exports.string(), external_exports.any()).optional().describe('Action details, e.g. {"api":"gmail.googleapis.com"} for enable_api, {"email":"a@b.com"} for add_test_user, {"name":"my-tool"} for create_project, {"recipe":{...}} for save_recipe (saving a recipe also needs this two-step approval). Keys per action: enable_api {api}; create_project {name?, organization? or folder?} (projectId is the NEW id); add_scopes/remove_scopes {scopes}; set_branding {fields:{appName, supportEmail, homepage, privacyPolicy, termsOfService, developerEmail}}; create_client {recipe, name, clientType?, allowOverwrite?}; sign_in_account {recipe, email, accountType?, note?}; add_test_user {email}; set_user_type {userType}; delete_client {name}; save_recipe {recipe}. For console actions also pass currentObserved: what you just read on the page, with the same keys as consolePlan.expected, so the preview and any live-project warning show the real before.')
   },
   async (args) => {
     const cfg = loadConfig();
@@ -38281,7 +38392,7 @@ function registerApply(name, description, annotations, sensitiveTool) {
       const started = Date.now();
       try {
         const out = await applyChange({ ticketId: ticket, sensitiveTool }, buildDeps(loadConfig()));
-        audit(PLUGIN, { tool: name, kind: "write", ok: true, ms: Date.now() - started, ticket, sensitive: sensitiveTool || void 0, applied: out.applied, api: out.api });
+        audit(PLUGIN, { tool: name, kind: "write", ok: true, ms: Date.now() - started, ticket, sensitive: sensitiveTool || void 0, applied: out.applied, api: out.api, projectId: out.projectId });
         return ok(out);
       } catch (err) {
         audit(PLUGIN, { tool: name, kind: "write", ok: false, ms: Date.now() - started, ticket, error: String(err.message || err) });
@@ -38292,7 +38403,7 @@ function registerApply(name, description, annotations, sensitiveTool) {
 }
 registerApply(
   "google_apply_change",
-  "STEP 2 of changing anything for Google sign-in: executes EXACTLY the change previewed by google_prepare_change, once. gcloud and sign-in changes run now; console changes return the steps for Kapture, and you must then call google_record_console_result. Only call this after the owner has explicitly said yes to the preview. Refused if writes are switched off or the ticket is unknown, expired or used.",
+  "STEP 2 of changing anything for Google sign-in: executes EXACTLY the change previewed by google_prepare_change, once. gcloud and sign-in changes run now (a new project is read back from Google to confirm it exists); console changes return the steps for Kapture, and you must then call google_record_console_result. Only call this after the owner has explicitly said yes to the preview. Refused if writes are switched off or the ticket is unknown, expired or used.",
   { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   false
 );

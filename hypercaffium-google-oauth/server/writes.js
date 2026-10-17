@@ -2,13 +2,13 @@
 // only after the owner says yes. Console changes are not trusted until Claude records what the page shows.
 // Everything outside (gcloud, sign-in, clock, settings) is injected so each rule is testable offline.
 //
-// deps = { config, gcloud: { enabledServices, enableService }, signIn: { signInAccount, installClientFile },
+// deps = { config, gcloud: { enabledServices, enableService, listProjects, createProject, describeProject }, signIn: { signInAccount, installClientFile },
 //          recipes: { getRecipe }, fs (optional, for existsSync), home (optional), now, store }   (createEngine adds the store)
 import crypto from 'node:crypto';
 import nodeFs from 'node:fs';
 import os from 'node:os';
 import { ACTIONS, consolePlan, compareObservation } from './console.js';
-import { PROJECT_ID, API_NAME } from './gcloud.js';
+import { PROJECT_ID, API_NAME, PROJECT_NAME, PARENT_ID } from './gcloud.js';
 import { classify } from './rules.js';
 import { expand, recipeHash, validateRecipe } from './recipes.js';
 
@@ -77,6 +77,7 @@ const checkEmail = (e) => {
 // The only params each action accepts (anything else is dropped before the ticket is stored).
 const ALLOWED_PARAMS = {
   enable_api: ['api'],
+  create_project: ['name', 'organization', 'folder'],
   sign_in_account: ['recipe', 'email', 'accountType', 'note'],
   save_recipe: ['recipe'],
   create_client: ['recipe', 'name', 'clientType', 'allowOverwrite'],
@@ -97,6 +98,16 @@ function normalizeParams(action, params, deps) {
   for (const k of ALLOWED_PARAMS[action] || []) if (params[k] !== undefined) p[k] = params[k];
   if (action === 'enable_api') {
     if (typeof p.api !== 'string' || !API_NAME.test(p.api)) throw new Error('api must be a service name such as gmail.googleapis.com.');
+  } else if (action === 'create_project') {
+    if (p.name !== undefined && (typeof p.name !== 'string' || !PROJECT_NAME.test(p.name))) {
+      throw new Error('name must be 4 to 30 letters, digits or hyphens, with no spaces (it can be renamed in the console later).');
+    }
+    if (p.organization !== undefined && p.folder !== undefined) throw new Error('Choose organization or folder for the new project, not both.');
+    for (const k of ['organization', 'folder']) {
+      if (p[k] !== undefined && (typeof p[k] !== 'string' || !PARENT_ID.test(p[k]))) {
+        throw new Error(`${k} must be a numeric id such as 123456789012 (google_list_organizations shows organization ids).`);
+      }
+    }
   } else if (action === 'sign_in_account') {
     if (!p.recipe) throw new Error('recipe is required.');
     checkEmail(p.email);
@@ -125,6 +136,7 @@ function normalizeParams(action, params, deps) {
 function afterPicture(action, p) {
   switch (action) {
     case 'enable_api': return `${p.api} is on`;
+    case 'create_project': return `a new project ${p.name ? `"${p.name}" ` : ''}with the id ${p.projectId} exists, ${placeOf(p)}`;
     case 'save_recipe': return `the recipe "${p.recipe.name}" is saved in your recipes folder`;
     case 'sign_in_account': return `${p.email} is signed in (recipe ${p.recipe}, account type ${p.accountType || '(none)'}, note ${p.note ? `"${p.note}"` : '(none)'})`;
     case 'create_client': return `a ${p.clientType} client named "${p.name}" exists`;
@@ -138,6 +150,12 @@ function afterPicture(action, p) {
     case 'back_to_testing': return 'publishing status is Testing (only listed test users can sign in)';
     default: return '';
   }
+}
+
+function placeOf(p) {
+  if (p.organization) return `inside the organization ${p.organization}`;
+  if (p.folder) return `inside the folder ${p.folder}`;
+  return 'with no organization or folder (it stands alone)';
 }
 
 // The exact places a recipe will run and write, with {home} expanded and {email} left as a placeholder.
@@ -172,6 +190,7 @@ export async function prepareChange({ projectId, action, params = {} } = {}, dep
   }
 
   const p = normalizeParams(action, params, deps);
+  if (action === 'create_project') p.projectId = projectId;
   const plan = mode === 'console' ? consolePlan(action, projectId, p) : undefined;
 
   let before;
@@ -180,6 +199,12 @@ export async function prepareChange({ projectId, action, params = {} } = {}, dep
     const enabled = await deps.gcloud.enabledServices(projectId);
     alreadyOn = enabled.includes(p.api);
     before = alreadyOn ? `${p.api} is already on` : `${p.api} is off`;
+  } else if (action === 'create_project') {
+    const mine = await deps.gcloud.listProjects();
+    if (mine.some((x) => x.projectId === projectId)) {
+      throw new Error(`You already have a project with the id ${projectId}, so there is nothing to create. Pick a new id.`);
+    }
+    before = `no project with the id ${projectId} in your account`;
   } else if (mode === 'console') {
     before = params.currentObserved !== undefined ? show(params.currentObserved) : UNREAD;
   } else {
@@ -200,6 +225,9 @@ export async function prepareChange({ projectId, action, params = {} } = {}, dep
   }
   const preview = { before, after };
   if (alreadyOn) preview.note = 'It is already on, so applying changes nothing.';
+  if (action === 'create_project') {
+    preview.note = 'No billing account is linked, so the project costs nothing. Project ids are unique across all of Google Cloud and can never be changed or reused; if someone else already has this id, Google refuses and nothing is created.';
+  }
 
   // Recipes are snapshotted now; apply and record use exactly this copy and refuse if the recipe changed.
   let recipeSnapshot;
@@ -283,6 +311,18 @@ export async function applyChange({ ticketId, sensitiveTool = false } = {}, deps
   }
 
   deps.store.setState(ticketId, 'failed'); // single use, even if the work below fails
+  if (p.action === 'create_project') {
+    const { name, organization, folder } = p.params;
+    await deps.gcloud.createProject({ projectId: p.projectId, name, organization, folder });
+    deps.store.setState(ticketId, 'recorded');
+    // Read it back from Google instead of assuming it worked.
+    try {
+      const project = await deps.gcloud.describeProject(p.projectId);
+      return { applied: true, action: p.action, projectId: p.projectId, verified: project.projectId === p.projectId, project };
+    } catch (err) {
+      return { applied: true, action: p.action, projectId: p.projectId, verified: false, verifyError: `Created, but reading it back failed: ${err.message}` };
+    }
+  }
   if (p.mode === 'gcloud') {
     await deps.gcloud.enableService(p.projectId, p.params.api);
     deps.store.setState(ticketId, 'recorded');

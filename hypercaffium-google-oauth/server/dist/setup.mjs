@@ -106,6 +106,13 @@ var FEATURES = [
     help: "Enabling a Google API on a project that is not live."
   },
   {
+    key: "projects",
+    risk: "medium",
+    label: "New projects",
+    stores: ["google"],
+    help: "Creating a new, empty Google Cloud project. No billing is linked, so it costs nothing."
+  },
+  {
     key: "testUsers",
     risk: "low",
     label: "Test users",

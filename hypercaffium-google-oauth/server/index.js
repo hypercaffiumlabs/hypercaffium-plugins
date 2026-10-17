@@ -11,14 +11,16 @@ import { z } from 'zod';
 import { audit, readAudit } from './audit.js';
 import { CONFIG_PATH, PLUGIN, loadConfig } from './config.js';
 import { ACTIONS, PAGES, labelsFor, pageUrl } from './console.js';
-import { PROJECT_ID, activeAccount, enableService, enabledServices, listProjects, resolveGcloud } from './gcloud.js';
+import {
+  PROJECT_ID, activeAccount, createProject, describeProject, enableService, enabledServices, listOrganizations, listProjects, resolveGcloud,
+} from './gcloud.js';
 import { checkAccounts, evaluateConsole } from './health.js';
 import { getRecipe, isBuiltinRecipe, listRecipes, saveRecipe } from './recipes.js';
 import { installClientFile, signInAccount } from './signin.js';
 import { TicketStore, applyChange, prepareChange, recordConsoleResult } from './writes.js';
 import { describeFeatures, saveSettings } from '../../shared/features.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 // loadConfig() honors this override, so saving must write the same file it reads.
 const SETTINGS_FILE = process.env.HYPERCAFFIUM_GOOGLE_OAUTH_CONFIG || CONFIG_PATH;
 const KAPTURE_NOTE = 'Console steps need the Kapture browser extension connected; without it they come back as manual steps.';
@@ -54,6 +56,9 @@ function buildDeps(config) {
     gcloud: {
       enabledServices: (projectId) => enabledServices(projectId, gcloudDeps),
       enableService: (projectId, api) => enableService(projectId, api, gcloudDeps),
+      listProjects: () => listProjects(gcloudDeps),
+      createProject: (args) => createProject(args, gcloudDeps),
+      describeProject: (projectId) => describeProject(projectId, gcloudDeps),
     },
     signIn: { signInAccount, installClientFile },
     recipes: { getRecipe, saveRecipe, isBuiltin: isBuiltinRecipe },
@@ -185,6 +190,13 @@ readTool(
 );
 
 readTool(
+  'google_list_organizations',
+  'List the Google Cloud organizations the signed-in gcloud account can see (id and name), for choosing where a new project lives with create_project. An empty list is normal for personal accounts.',
+  {},
+  async () => listOrganizations({ gcloudPath: gcloudPathFor(loadConfig()) }),
+);
+
+readTool(
   'google_project_status',
   'One project at a glance: which APIs are enabled, whether it is marked live in the settings, and the console page address for every Google Auth Platform page (read those with Kapture to see publishing status, clients, scopes and test users).',
   { projectId },
@@ -246,7 +258,7 @@ readTool(
   {
     projectId: projectId.optional().describe('Google Cloud project id. Not used for save_recipe.'),
     action: z.string().describe(`One of: ${Object.keys(ACTIONS).join(', ')}`),
-    params: z.record(z.string(), z.any()).optional().describe('Action details, e.g. {"api":"gmail.googleapis.com"} for enable_api, {"email":"a@b.com"} for add_test_user, {"recipe":{...}} for save_recipe (saving a recipe also needs this two-step approval). Keys per action: enable_api {api}; add_scopes/remove_scopes {scopes}; set_branding {fields:{appName, supportEmail, homepage, privacyPolicy, termsOfService, developerEmail}}; create_client {recipe, name, clientType?, allowOverwrite?}; sign_in_account {recipe, email, accountType?, note?}; add_test_user {email}; set_user_type {userType}; delete_client {name}; save_recipe {recipe}. For console actions also pass currentObserved: what you just read on the page, with the same keys as consolePlan.expected, so the preview and any live-project warning show the real before.'),
+    params: z.record(z.string(), z.any()).optional().describe('Action details, e.g. {"api":"gmail.googleapis.com"} for enable_api, {"email":"a@b.com"} for add_test_user, {"name":"my-tool"} for create_project, {"recipe":{...}} for save_recipe (saving a recipe also needs this two-step approval). Keys per action: enable_api {api}; create_project {name?, organization? or folder?} (projectId is the NEW id); add_scopes/remove_scopes {scopes}; set_branding {fields:{appName, supportEmail, homepage, privacyPolicy, termsOfService, developerEmail}}; create_client {recipe, name, clientType?, allowOverwrite?}; sign_in_account {recipe, email, accountType?, note?}; add_test_user {email}; set_user_type {userType}; delete_client {name}; save_recipe {recipe}. For console actions also pass currentObserved: what you just read on the page, with the same keys as consolePlan.expected, so the preview and any live-project warning show the real before.'),
   },
   async (args) => {
     const cfg = loadConfig();
@@ -263,7 +275,7 @@ function registerApply(name, description, annotations, sensitiveTool) {
       const started = Date.now();
       try {
         const out = await applyChange({ ticketId: ticket, sensitiveTool }, buildDeps(loadConfig()));
-        audit(PLUGIN, { tool: name, kind: 'write', ok: true, ms: Date.now() - started, ticket, sensitive: sensitiveTool || undefined, applied: out.applied, api: out.api });
+        audit(PLUGIN, { tool: name, kind: 'write', ok: true, ms: Date.now() - started, ticket, sensitive: sensitiveTool || undefined, applied: out.applied, api: out.api, projectId: out.projectId });
         return ok(out);
       } catch (err) {
         audit(PLUGIN, { tool: name, kind: 'write', ok: false, ms: Date.now() - started, ticket, error: String(err.message || err) });
@@ -275,7 +287,7 @@ function registerApply(name, description, annotations, sensitiveTool) {
 
 registerApply(
   'google_apply_change',
-  'STEP 2 of changing anything for Google sign-in: executes EXACTLY the change previewed by google_prepare_change, once. gcloud and sign-in changes run now; console changes return the steps for Kapture, and you must then call google_record_console_result. Only call this after the owner has explicitly said yes to the preview. Refused if writes are switched off or the ticket is unknown, expired or used.',
+  'STEP 2 of changing anything for Google sign-in: executes EXACTLY the change previewed by google_prepare_change, once. gcloud and sign-in changes run now (a new project is read back from Google to confirm it exists); console changes return the steps for Kapture, and you must then call google_record_console_result. Only call this after the owner has explicitly said yes to the preview. Refused if writes are switched off or the ticket is unknown, expired or used.',
   { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   false,
 );

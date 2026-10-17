@@ -14,12 +14,13 @@ export const PAGES = {
 
 // Verified against the live console on 2026-10-17 (an app In production):
 //   /auth/audience: Publishing status, In production, Back to testing, User type, External, Make internal
-//   /auth/scopes (shown as "Data Access"): Add or remove scopes, Save
+//   /auth/scopes (shown as "Data Access"): Add or remove scopes, Manually add scopes, Add to table,
+//     Update, Save; adding a restricted scope opens a "Verification required" box with Continue
 //   /auth/clients: Create client, Delete (client type shows as "Desktop")
 //   /auth/branding: App name, User support email, Application privacy policy link,
 //     Application terms of service link, Developer contact information
 // Not yet seen (only shown in Testing, or inside dialogs that need a click): Testing, Publish app,
-// Make external, Test users, Add users, Confirm, Update, Application type, Desktop app,
+// Make external, Test users, Add users, Confirm, Application type, Desktop app,
 // Web application, Create, Application home page.
 export const LABELS = {
   publishingStatus: 'Publishing status',
@@ -35,6 +36,9 @@ export const LABELS = {
   save: 'Save',
   confirm: 'Confirm',
   addOrRemoveScopes: 'Add or remove scopes',
+  manuallyAddScopes: 'Manually add scopes',
+  addToTable: 'Add to table',
+  continue: 'Continue',
   update: 'Update',
   createClient: 'Create client',
   applicationType: 'Application type',
@@ -69,6 +73,7 @@ export function labelsFor(page) {
 
 export const ACTIONS = {
   enable_api: { mode: 'gcloud', feature: 'apis' },
+  create_project: { mode: 'gcloud', feature: 'projects' },
   add_test_user: { mode: 'console', page: 'audience', feature: 'testUsers' },
   set_branding: { mode: 'console', page: 'branding', feature: 'branding' },
   add_scopes: { mode: 'console', page: 'scopes', feature: 'scopes' },
@@ -145,7 +150,14 @@ export function consolePlan(action, projectId, params = {}) {
     }
     case 'add_scopes':
       need(isList(params.scopes), 'scopes must be a non-empty list');
-      actions = [`Click ${q(L.addOrRemoveScopes)}.`, ...params.scopes.map((s) => `Tick the scope ${s} (use the filter box to find it).`), `Click ${q(L.update)}, then ${q(L.save)}.`];
+      actions = [
+        `Click ${q(L.addOrRemoveScopes)}.`,
+        `Tick any of these scopes already listed in the panel: ${params.scopes.join(', ')}.`,
+        `Type the full address of each one not listed (https://www.googleapis.com/auth/...) into the ${q(L.manuallyAddScopes)} box, separated by commas, and click ${q(L.addToTable)}.`,
+        'Check that exactly the wanted scopes are ticked, and no others were added.',
+        `Click ${q(L.update)}. If a box says verification is required, click ${q(L.continue)}: it only closes the message and submits nothing.`,
+        `Click ${q(L.save)} and wait for Google to say the changes were saved.`,
+      ];
       expected = { scopesInclude: params.scopes };
       break;
     case 'remove_scopes':
