@@ -21,7 +21,11 @@ Walk the owner through setting up the hypercaffium-google-oauth plugin. Plain En
 
 5. **Critical features** (removing scopes, deleting clients, moving an app back to Testing). Show their current state and explain they start off. They can NOT be switched on from this chat: give the owner the exact terminal command from `criticalSettings` (it looks like `node "<plugin folder>/server/dist/setup.mjs"`) and explain they must open a terminal window themselves and run it there. If a critical feature is on and the owner wants it off, switch it off with `google_save_settings`.
 
-6. **Browser check.** Some steps happen in the Google Cloud console, driven through the Kapture browser extension. Call Kapture `list_tabs`. If it works, say the browser is connected. If it fails, explain Kapture is not connected: the plugin still works, but console steps will come back as numbered manual steps for the owner to do by hand.
+6. **Browser check (Kapture, strongly recommended).** About half of the setup happens on Google Cloud console pages that have no API. Kapture is the free companion that lets Claude do those steps in the owner's browser and check each one. It is a Chrome extension plus a small connector, not a Claude Code plugin. Use the `kapture` part of the `google_check_setup` result (`why`, `install`, `connect`) for the exact wording and steps; do not make up other steps.
+   - **Kapture tools not available** (there is no Kapture `list_tabs` tool in this session): Kapture is not installed. Say plainly that it is strongly recommended and why, then give the `install` steps as a numbered list, followed by the `connect` steps. Mention that the owner can run `/hypercaffium-google-oauth:setup` again after restarting to confirm it works.
+   - **`list_tabs` fails or shows no connected tab:** Kapture is installed but the browser is not connected. Give the `connect` steps, then call `list_tabs` once more after the owner says it is done.
+   - **`list_tabs` works:** say the browser is connected, and pass on the tip to keep the Google Cloud tab in front while Claude works.
+   - Whatever the result, the plugin still works without Kapture: console steps then come back as numbered manual steps, and the health check reports console items as "not checked". Say this once, after the recommendation, not instead of it.
 
 7. Finish with a short summary of what is on and off, and tell the owner to restart Claude Code so the plugin's tools match the new settings.
 

@@ -21,6 +21,10 @@ The first command adds the Hypercaffium catalog; then install the plugin for eac
 
 Then run **`/hypercaffium-apple:setup`**, **`/hypercaffium-play:setup`** and/or **`/hypercaffium-google-oauth:setup`**. Each connects your account and lets you choose what the plugin may change, grouped by risk level. Critical areas (users, signing keys, refunds, removing Google sign-in setup) start off and can only be switched on from a terminal menu.
 
+### Recommended companion for Google sign-in: Kapture
+
+`hypercaffium-google-oauth` works best with **[Kapture](https://github.com/williamkapke/kapture)**, a free Chrome extension plus a small connector that lets Claude work in your browser. Google has no API for about half of the sign-in setup, so with Kapture Claude does those console steps for you and checks each one; without it you get numbered steps to do by hand. Kapture is not a Claude Code plugin; see [Set up Kapture](hypercaffium-google-oauth/README.md#set-up-kapture-recommended) for the three steps. The two app-store plugins do not need Kapture: they work entirely through Apple's and Google's official APIs.
+
 ## Safety model
 
 Writes are off until you switch them on, and you choose which areas may be changed at all. A change is always two steps (prepare, then apply the exact ticket), is checked against the store's own schema, is classified into tiers by the server, and is written to an audit log with before and after values. Other deletes and API keys are blocked. Critical changes (users, signing, refunds, and removing scopes or clients) go through a separate approval tool, only after you switch that area on in the terminal menu.

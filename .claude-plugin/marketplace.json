@@ -17,7 +17,7 @@
     {
       "name": "hypercaffium-google-oauth",
       "source": "./hypercaffium-google-oauth",
-      "description": "Set up and check Google sign-in for any tool from Claude: Google Cloud project and APIs, Google Auth Platform branding, scopes, clients and publishing, account sign-ins and a health check. Every change is previewed, confirmed and audited."
+      "description": "Set up and check Google sign-in for any tool from Claude: Google Cloud project and APIs, Google Auth Platform branding, scopes, clients and publishing, account sign-ins and a health check. Works best with the free Kapture browser extension for the console steps. Every change is previewed, confirmed and audited."
     }
   ],
   "metadata": {

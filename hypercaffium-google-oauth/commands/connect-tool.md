@@ -30,5 +30,5 @@ Before starting, call `google_check_setup`. If writes are off or gcloud is not r
 Rules:
 - Never read, print or paste a client secret, token or key file.
 - If a page does not look like the plan, stop and tell the owner what you see. Do not click anything outside the plan.
-- If Kapture is not connected, give the manual numbered steps from the plan and ask the owner to confirm what they see. Do not claim success without observing it.
+- If Kapture is not connected, say once that it is the recommended companion and that `/hypercaffium-google-oauth:setup` walks through installing it. Then give the manual numbered steps from the plan and ask the owner to confirm what they see. Do not claim success without observing it.
 - No em dashes.

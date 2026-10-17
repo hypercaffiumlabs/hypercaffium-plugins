@@ -6,7 +6,9 @@ Such tools need a Google Cloud "sign-in app": a project with the right APIs on, 
 
 Every change is **previewed, confirmed and logged**.
 
-> Status: pre-release (0.2.0). Not affiliated with or endorsed by Google. "Google" and "Google Cloud" are Google trademarks.
+> **Strongly recommended companion: [Kapture](#set-up-kapture-recommended).** Google has no API for about half of this setup (branding, scopes, audience, OAuth clients, publishing). With the free Kapture browser extension, Claude does those console steps for you and reads each page back to confirm it worked. Without it, you get numbered steps to click through yourself. Kapture is a separate Chrome extension plus a small connector, not a Claude Code plugin. [Set it up in three steps.](#set-up-kapture-recommended)
+
+> Status: pre-release (0.2.1). Not affiliated with or endorsed by Google. "Google" and "Google Cloud" are Google trademarks.
 
 ## What it can do
 
@@ -27,8 +29,23 @@ See [COVERAGE.md](COVERAGE.md) for what is automated and how.
 
 - [Claude Code](https://claude.com/claude-code) and Node.js 20 or newer.
 - The Google Cloud CLI, `gcloud`, installed and signed in (`gcloud auth login`). Install: https://cloud.google.com/sdk/docs/install. `/hypercaffium-google-oauth:setup` checks it.
-- For automation of the console steps: the **Kapture** browser extension, connected to the browser where you are signed in to Google Cloud.
-- **Without Kapture** everything still works: console steps come back as numbered manual steps with direct links, and the health check reports console items as "not checked" rather than guessing.
+- **Strongly recommended:** [Kapture](https://github.com/williamkapke/kapture) in Chrome, so Claude can do the console steps for you. See [Set up Kapture](#set-up-kapture-recommended) below.
+
+## Set up Kapture (recommended)
+
+[Kapture](https://github.com/williamkapke/kapture) is a free, open-source Chrome extension plus a small local connector (an MCP server) that lets Claude read and click in your browser. It is made by a separate developer and is not a Claude Code plugin, so it is not installed with `/plugin`.
+
+1. **Install the extension** in Chrome: https://to.kap.co/kapture-extension (click "Add to Chrome").
+2. **Add the connector** to Claude Code. In a terminal, run:
+   ```
+   claude mcp add kapture -s user -- npx -y kapture-mcp@latest bridge
+   ```
+   Then restart Claude Code.
+3. **Connect the browser.** Open the [Google Cloud console](https://console.cloud.google.com) in Chrome, signed in to the right Google account, click the Kapture icon in the toolbar and switch the connection on. The badge shows a check mark when connected.
+
+Run `/hypercaffium-google-oauth:setup` afterwards: it checks Kapture and tells you exactly which step is missing. While Claude works in the console, keep that tab in front; clicks in a background tab can time out.
+
+**Without Kapture** the plugin still works: console steps come back as numbered manual steps with direct links, and the health check reports console items as "not checked" rather than guessing.
 
 ## The one limit
 
@@ -64,7 +81,7 @@ Restart Claude Code once after installing.
 
 ## Set up
 
-Run **`/hypercaffium-google-oauth:setup`**. It checks gcloud and the browser extension, asks which projects are live, and shows a menu of what the plugin may change, grouped by risk:
+Run **`/hypercaffium-google-oauth:setup`**. It checks gcloud and Kapture (with the exact steps if Kapture is missing or not connected), asks which projects are live, and shows a menu of what the plugin may change, grouped by risk:
 
 | Risk | Areas | Default |
 |---|---|---|

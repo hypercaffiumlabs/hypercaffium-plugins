@@ -1,6 +1,6 @@
 {
   "name": "hypercaffium-google-oauth-server",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "Small MCP server that talks to the Google Cloud, Google Auth Platform and OAuth client APIs.",

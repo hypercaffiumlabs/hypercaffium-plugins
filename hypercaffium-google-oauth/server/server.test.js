@@ -118,7 +118,12 @@ test('server: settings can be saved, critical features cannot be switched on, ca
     assert.equal(crit.isError, true);
     assert.match(crit.text, /critical/);
     const check = JSON.parse((await s.call('google_check_setup')).text);
-    assert.ok('gcloud' in check && check.kapture.includes('Kapture'));
+    assert.ok('gcloud' in check && check.kapture.note.includes('Kapture'));
+    // the recommended companion comes with exact install and connect steps
+    assert.equal(check.kapture.recommended, true);
+    assert.ok(check.kapture.install.some((step) => step.includes('claude mcp add kapture')));
+    assert.ok(check.kapture.install.some((step) => step.includes('to.kap.co/kapture-extension')));
+    assert.ok(check.kapture.connect.length > 0);
     const log = await s.call('google_audit_log', { limit: 10 });
     assert.match(log.text, /google_save_settings/);
     assert.match(log.text, /"ok": false/);

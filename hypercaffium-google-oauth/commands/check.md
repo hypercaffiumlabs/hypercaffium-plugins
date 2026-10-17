@@ -11,7 +11,7 @@ Tell the owner, from evidence, whether their Google sign-in setup is healthy. Pl
 1. If the recipe or project is missing, call `google_list_recipes` / `google_list_projects` and ask.
 2. Call `google_check_accounts` for the recipe. It reports, per account, whether the saved login still works and which scopes it really has.
 3. Call Kapture `list_tabs`. If Kapture is connected, read the console pages with Kapture (read only, never click anything that changes data): for each page use `google_console_page` to get the address and what to read (publishing status, user type, scopes, clients, test users, verification status). Build one observation, `{ publishingStatus, userType, scopes[], clients[{name, type}], testUsers, verificationStatus }`, using only what you really saw, and call `google_evaluate_console`.
-4. If Kapture is not connected, report every console item as **not checked** (never as ok) and say how to check it: connect Kapture, or open the addresses from `google_project_status` by hand.
+4. If Kapture is not connected, report every console item as **not checked** (never as ok) and say how to check it: connect Kapture (the recommended companion; `/hypercaffium-google-oauth:setup` walks through installing and connecting it), or open the addresses from `google_project_status` by hand.
 5. Give a verdict per item: each account's login, publishing status, scopes needed vs configured, OAuth client present. Mark what is fine, what needs action (for example "signed in while in Testing, will expire in 7 days: sign in again") and what could not be checked. Lead with anything that needs action.
 
 ## Self-test: `--selftest [project]`

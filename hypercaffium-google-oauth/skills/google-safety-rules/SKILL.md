@@ -1,7 +1,7 @@
 ---
 name: google-safety-rules
 description: Use when working with Google sign-in setup, Google Cloud projects, enabling Google APIs, the Google Auth Platform (branding, scopes, audience, publishing, OAuth clients), signing in Google accounts for a tool, or checking whether a Google sign-in is healthy. Explains the google_ tools and the mandatory prepare-then-apply protocol, including the Kapture rules for console steps.
-version: 0.2.0
+version: 0.2.1
 ---
 
 # Google sign-in setup: how to use these tools safely

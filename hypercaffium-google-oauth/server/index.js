@@ -20,10 +20,29 @@ import { installClientFile, signInAccount } from './signin.js';
 import { TicketStore, applyChange, prepareChange, recordConsoleResult } from './writes.js';
 import { describeFeatures, saveSettings } from '../../shared/features.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 // loadConfig() honors this override, so saving must write the same file it reads.
 const SETTINGS_FILE = process.env.HYPERCAFFIUM_GOOGLE_OAUTH_CONFIG || CONFIG_PATH;
-const KAPTURE_NOTE = 'Console steps need the Kapture browser extension connected; without it they come back as manual steps.';
+const KAPTURE_NOTE = 'Console steps need the Kapture browser extension connected; without it they come back as manual steps. Setup steps: google_check_setup (kapture.install, kapture.connect) or /hypercaffium-google-oauth:setup.';
+// Kapture is a separate, free companion (Chrome extension + local MCP server), not a Claude Code plugin.
+// One copy of the steps so setup, check and connect-tool all show the same thing.
+const KAPTURE_SETUP = {
+  note: KAPTURE_NOTE,
+  recommended: true,
+  why: 'Google has no API for the Auth Platform pages (branding, scopes, audience, OAuth clients, publishing). With Kapture, Claude does those steps in your browser and reads each page back to confirm it. Without it, you get numbered steps to click through yourself.',
+  what: 'Kapture is a free Chrome extension plus a small local connector (MCP server). It is not a Claude Code plugin, so it is not installed with /plugin.',
+  install: [
+    'Install the Kapture extension in Chrome: https://to.kap.co/kapture-extension (click "Add to Chrome").',
+    'Add the connector to Claude Code from a terminal: claude mcp add kapture -s user -- npx -y kapture-mcp@latest bridge',
+    'Restart Claude Code so the Kapture tools load.',
+  ],
+  connect: [
+    'In Chrome, open the Google Cloud console (https://console.cloud.google.com) signed in to the right Google account.',
+    'Click the Kapture icon in the toolbar and switch the connection on (the badge shows a check mark when connected).',
+    'Keep that tab in front while Claude works: clicks in a background tab can time out.',
+  ],
+  project: 'https://github.com/williamkapke/kapture',
+};
 
 // Keep tool results small enough to be useful; say so clearly when something was cut.
 const MAX_OUTPUT_CHARS = 60000;
@@ -117,7 +136,7 @@ function settingsView() {
 
 readTool(
   'google_check_setup',
-  'Check that the Google Cloud command line tool (gcloud) is found and signed in, which account it uses compared with the expected one, and the settings summary. Run this first if any other google_ tool fails. Console steps need the Kapture browser extension.',
+  'Check that the Google Cloud command line tool (gcloud) is found and signed in, which account it uses compared with the expected one, and the settings summary. Run this first if any other google_ tool fails. Also returns the setup steps for Kapture, the recommended browser companion that console steps need.',
   {},
   async () => {
     const cfg = loadConfig();
@@ -140,7 +159,7 @@ readTool(
       writesEnabled: cfg.writesEnabled,
       liveProjects: cfg.liveProjects,
       features: describeFeatures(cfg.features, 'google'),
-      kapture: KAPTURE_NOTE,
+      kapture: KAPTURE_SETUP,
       writesNote: cfg.writesEnabled
         ? 'Writes are ON: changes need google_prepare_change then google_apply_change.'
         : 'Writes are OFF (kill switch). Previews still work. Turn them on with google_save_settings or /hypercaffium-google-oauth:setup.',
