@@ -6,6 +6,7 @@
 |---|---|
 | [`hypercaffium-apple`](hypercaffium-apple) | App Store Connect: releases, TestFlight, reviews, subscriptions. Its `/hypercaffium-apple:release-status` and `/hypercaffium-apple:check-changes` also cover Google Play when the Play plugin is installed. |
 | [`hypercaffium-play`](hypercaffium-play) | Google Play Console: releases, listing, reviews, subscriptions |
+| [`hypercaffium-google-oauth`](hypercaffium-google-oauth) | Google sign-in: Google Cloud project and APIs, Auth Platform branding, scopes, clients, publishing and account sign-ins |
 
 ## Install
 
@@ -17,7 +18,7 @@ The first command adds the Hypercaffium catalog; then install the plugin for eac
 /plugin install hypercaffium-play@hypercaffium
 ```
 
-Then run **`/hypercaffium-apple:setup`** and/or **`/hypercaffium-play:setup`**. Each connects your account and lets you choose what the plugin may change, grouped by risk level. Critical areas (users, signing keys, refunds) start off and can only be switched on from a terminal menu.
+Then run **`/hypercaffium-apple:setup`**, **`/hypercaffium-play:setup`** and/or **`/hypercaffium-google-oauth:setup`**. Each connects your account and lets you choose what the plugin may change, grouped by risk level. Critical areas (users, signing keys, refunds) start off and can only be switched on from a terminal menu.
 
 ## Safety model
 

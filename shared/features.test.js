@@ -88,3 +88,35 @@ test('the terminal menu refuses to run without an interactive terminal', () => {
   assert.equal(r.status, 1);
   assert.match(r.stderr, /needs an interactive terminal/);
 });
+
+const GOOGLE_KEYS = ['apis', 'branding', 'clients', 'destructive', 'liveProjects', 'publishing', 'scopes', 'signIns', 'testUsers'];
+
+test('google gets only its own features', () => {
+  assert.deepEqual(Object.keys(resolveFeatures({}, 'google')).sort(), GOOGLE_KEYS);
+});
+
+test('google defaults: all on except destructive', () => {
+  const f = resolveFeatures({}, 'google');
+  for (const k of GOOGLE_KEYS) assert.equal(f[k], k !== 'destructive', k);
+});
+
+test('apple and play are unchanged by the google features', () => {
+  const apple = featuresFor('apple').map((f) => f.key);
+  const play = featuresFor('play').map((f) => f.key);
+  assert.equal(apple.length, 10);
+  assert.equal(play.length, 10);
+  for (const k of GOOGLE_KEYS) {
+    assert.ok(!apple.includes(k), `apple has ${k}`);
+    assert.ok(!play.includes(k), `play has ${k}`);
+  }
+});
+
+test('google features have a label and help text', () => {
+  for (const group of describeFeatures(resolveFeatures({}, 'google'), 'google')) {
+    for (const f of group.features) assert.ok(f.label && f.help, f.key);
+  }
+});
+
+test('destructive cannot be switched on from chat', () => {
+  assert.throws(() => saveSettings(tmpFile(), { features: { destructive: true } }, 'google'), /critical/);
+});

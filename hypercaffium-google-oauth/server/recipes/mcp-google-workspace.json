@@ -1,0 +1,35 @@
+{
+  "name": "mcp-google-workspace",
+  "description": "Gmail and Google Calendar through the mcp-google-workspace server.",
+  "apis": [
+    "gmail.googleapis.com",
+    "calendar-json.googleapis.com"
+  ],
+  "scopes": [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
+    "https://www.googleapis.com/auth/calendar.events"
+  ],
+  "clientType": "desktop",
+  "clientFile": "{home}/mcp-google-workspace/.gauth.json",
+  "accountsFile": {
+    "path": "{home}/mcp-google-workspace/.accounts.json",
+    "listKey": "accounts",
+    "entry": {
+      "email": "{email}",
+      "account_type": "{accountType}",
+      "extra_info": "{note}"
+    }
+  },
+  "login": {
+    "command": "npm run authenticate -- {email} --force",
+    "cwd": "{home}/mcp-google-workspace",
+    "timeoutSec": 300
+  },
+  "tokens": {
+    "path": "{home}/mcp-google-workspace/.oauth2.{email}.json",
+    "refreshTokenField": "refresh_token"
+  }
+}

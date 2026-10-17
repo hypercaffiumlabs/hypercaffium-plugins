@@ -6,7 +6,7 @@ import { stdin, stdout } from 'node:process';
 import { describeFeatures, featuresFor, isCritical, pick, resolveFeatures, saveSettings } from './features.js';
 import fs from 'node:fs';
 
-const NAMES = { apple: 'Hypercaffium Apple (App Store Connect)', play: 'Hypercaffium Play (Google Play Console)' };
+const NAMES = { apple: 'Hypercaffium Apple (App Store Connect)', play: 'Hypercaffium Play (Google Play Console)', google: 'Hypercaffium Google OAuth (Google Auth Platform)' };
 
 function readFile(configPath) {
   try {

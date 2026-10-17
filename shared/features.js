@@ -16,6 +16,7 @@ export const RISK_LABEL = {
 };
 
 // label/help can differ per store: { apple, play } objects, or one string for both.
+// An entry without `stores` applies to apple and play only.
 export const FEATURES = [
   {
     key: 'testing',
@@ -97,9 +98,72 @@ export const FEATURES = [
     stores: ['play'], // Apple's API has no refund or order actions; Apple handles refunds itself.
     help: 'Refunding orders and cancelling, revoking or deferring customer subscriptions.',
   },
+  {
+    key: 'apis',
+    risk: 'low',
+    label: 'Turn on Google APIs',
+    stores: ['google'],
+    help: 'Enabling a Google API on a project that is not live.',
+  },
+  {
+    key: 'testUsers',
+    risk: 'low',
+    label: 'Test users',
+    stores: ['google'],
+    help: 'Adding people to the test user list of an app that is still in Testing.',
+  },
+  {
+    key: 'branding',
+    risk: 'medium',
+    label: 'Branding',
+    stores: ['google'],
+    help: 'Editing the app name, logo, support email and links shown on the Google sign-in screen.',
+  },
+  {
+    key: 'scopes',
+    risk: 'medium',
+    label: 'Scopes',
+    stores: ['google'],
+    help: 'Adding the permissions your app asks people to grant when they sign in.',
+  },
+  {
+    key: 'clients',
+    risk: 'medium',
+    label: 'Sign-in clients',
+    stores: ['google'],
+    help: 'Creating OAuth clients, the IDs your app uses to start a Google sign-in.',
+  },
+  {
+    key: 'signIns',
+    risk: 'medium',
+    label: 'Account sign-ins',
+    stores: ['google'],
+    help: 'Signing in Google accounts so Claude can act on their behalf.',
+  },
+  {
+    key: 'publishing',
+    risk: 'high',
+    label: 'Publishing to production',
+    stores: ['google'],
+    help: 'Moving an app from Testing to In production so anyone can sign in.',
+  },
+  {
+    key: 'liveProjects',
+    risk: 'high',
+    label: 'Changes on live projects',
+    stores: ['google'],
+    help: 'Any change to a project you have marked as live.',
+  },
+  {
+    key: 'destructive',
+    risk: 'critical',
+    label: 'Removing or resetting sign-in setup',
+    stores: ['google'],
+    help: 'Deleting a client or its secret, removing scopes from a live project, or moving an app back to Testing.',
+  },
 ];
 
-export const featuresFor = (store) => FEATURES.filter((f) => !f.stores || f.stores.includes(store));
+export const featuresFor = (store) => FEATURES.filter((f) => (f.stores || ['apple', 'play']).includes(store));
 export const pick = (value, store) => (value && typeof value === 'object' ? value[store] : value);
 export const isCritical = (key) => FEATURES.some((f) => f.key === key && f.risk === 'critical');
 export const defaultOn = (key) => !isCritical(key);
