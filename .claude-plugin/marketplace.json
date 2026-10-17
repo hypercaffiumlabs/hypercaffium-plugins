@@ -21,6 +21,6 @@
     }
   ],
   "metadata": {
-    "description": "Claude Code plugins for running App Store Connect and Google Play releases safely: every change is previewed, confirmed and audited."
+    "description": "Claude Code plugins for running App Store Connect and Google Play releases and Google sign-in setup safely: every change is previewed, confirmed and audited."
   }
 }
