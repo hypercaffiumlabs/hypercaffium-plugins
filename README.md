@@ -1,5 +1,7 @@
 # Hypercaffium plugins
 
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/jdobbsclt)
+
 [Claude Code](https://claude.com/claude-code) plugins that let Claude run your app-store and Google sign-in work, safely: every change is previewed, confirmed and logged.
 
 | Plugin | What it is |
